@@ -36,8 +36,8 @@ flowchart TD
     example_pkg_utils[utils]
 
     example_pkg --> example_pkg_models
-    example_pkg --> example_pkg_utils
     example_pkg --> example_pkg_services
+    example_pkg --> example_pkg_utils
     example_pkg_services --> example_pkg_models
     example_pkg_services --> example_pkg_utils
     example_pkg_circular_a -->|circular| example_pkg_circular_b
@@ -64,8 +64,8 @@ package example_pkg {
   [example_pkg.utils] as example_pkg_utils
 }
 example_pkg ..> example_pkg_models
-example_pkg ..> example_pkg_utils
 example_pkg ..> example_pkg_services
+example_pkg ..> example_pkg_utils
 example_pkg_services ..> example_pkg_models
 example_pkg_services ..> example_pkg_utils
 example_pkg_circular_a ..> example_pkg_circular_b #red : circular

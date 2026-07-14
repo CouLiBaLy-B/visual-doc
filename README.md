@@ -197,6 +197,75 @@ Activez Pages : Settings → Pages → Source → GitHub Actions.
 
 ---
 
+## 📚 Utilisation comme librairie Python
+
+`gendoc` est aussi une librairie, pas seulement une CLI :
+
+```python
+import gendoc
+
+# 1. Analyse
+pkg = gendoc.analyze_package("./mon_package")
+print(f"{len(pkg.classes)} classes, {len(pkg.modules)} modules")
+print(f"Cycles: {pkg.circular_dependencies}")
+
+# 2. API haut niveau
+docs_path = gendoc.build_docs(
+    "./mon_package",
+    output_dir="./site",
+    docs_dir="./docs",
+    formats=["mmd", "puml", "svg"],
+    site_name="Ma Doc",
+    public_only=False,
+    focus_class="Order",  # optionnel
+    focus_depth=2,
+)
+
+# 3. Diagrammes en mémoire (pour notebook, autre outil)
+diags = gendoc.get_diagrams("./mon_package", diagram_format="mermaid")
+print(diags["package"])  # flowchart TD ...
+print(diags["classes"])  # classDiagram ...
+
+# Focus
+focus = gendoc.get_diagrams("./mon_package", "mermaid", focus_class="User", depth=1)
+print(focus["focus_User"])
+
+# 4. Check CI
+if gendoc.check_package("./mon_package"):
+    print("OK analysable")
+
+# 5. Config objet
+cfg = gendoc.GendocConfig(
+    package_path="src/mon_pkg",
+    output_dir="site",
+    public_only=True,
+    exclude_patterns=["test_*"],
+)
+gendoc.build_docs_with_config(cfg)
+
+# 6. Quick overview
+print(gendoc.quick_overview("./example/example_pkg"))
+```
+
+Exemple complet : `examples/library_usage.py`
+
+```bash
+python examples/library_usage.py
+```
+
+Intégration dans votre propre outil :
+
+```python
+def my_tool(pkg_path):
+    pkg = gendoc.analyze(pkg_path)
+    return {
+        "classes": [c.qualified_name for c in pkg.classes.values()],
+        "circular": pkg.circular_dependencies,
+    }
+```
+
+---
+
 ## 🧪 Tests & couverture
 
 ```bash
