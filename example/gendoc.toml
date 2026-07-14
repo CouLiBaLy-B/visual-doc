@@ -1,0 +1,11 @@
+[gendoc]
+package_path = "example_pkg"
+package_name = "example_pkg"
+output_dir = "../site"
+docs_dir = "../docs"
+formats = ["mmd", "puml", "svg"]
+exclude_patterns = ["__pycache__"]
+include_private = false
+public_only = false
+site_name = "Example Package - Demo gendoc"
+theme = "material"

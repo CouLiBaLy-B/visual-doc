@@ -1,0 +1,75 @@
+site_name: Demo
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - toc.follow
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: ['.', 'example', 'example/example_pkg', 'src']
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_object_full_path: false
+            heading_level: 2
+            separate_signature: true
+
+nav:
+  - Accueil: index.md
+  - Packages: packages.md
+
+  - Modules:
+
+    - example_pkg: modules/example_pkg.md
+
+    - example_pkg.circular_a: modules/example_pkg_circular_a.md
+
+    - example_pkg.circular_b: modules/example_pkg_circular_b.md
+
+    - example_pkg.models: modules/example_pkg_models.md
+
+    - example_pkg.services: modules/example_pkg_services.md
+
+    - example_pkg.utils: modules/example_pkg_utils.md
+
+  - API:
+
+    - example_pkg: api/example_pkg.md
+
+    - example_pkg.circular_a: api/example_pkg_circular_a.md
+
+    - example_pkg.circular_b: api/example_pkg_circular_b.md
+
+    - example_pkg.models: api/example_pkg_models.md
+
+    - example_pkg.services: api/example_pkg_services.md
+
+    - example_pkg.utils: api/example_pkg_utils.md
+
+  - Diagrammes:
+    - Package Mermaid: diagrams/package.mmd
+    - Package PlantUML: diagrams/package.puml
