@@ -1,0 +1,19 @@
+@startuml
+title Package Diagram - example_pkg
+skinparam packageStyle rectangle
+package example_pkg {
+  [example_pkg] as example_pkg
+  [example_pkg.circular_a] as example_pkg_circular_a
+  [example_pkg.circular_b] as example_pkg_circular_b
+  [example_pkg.models] as example_pkg_models
+  [example_pkg.services] as example_pkg_services
+  [example_pkg.utils] as example_pkg_utils
+}
+example_pkg ..> example_pkg_models
+example_pkg ..> example_pkg_utils
+example_pkg ..> example_pkg_services
+example_pkg_services ..> example_pkg_models
+example_pkg_services ..> example_pkg_utils
+example_pkg_circular_a ..> example_pkg_circular_b #red : circular
+example_pkg_circular_b ..> example_pkg_circular_a #red : circular
+@enduml

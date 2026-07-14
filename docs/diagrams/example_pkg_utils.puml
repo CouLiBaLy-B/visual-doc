@@ -1,0 +1,18 @@
+@startuml
+title Module example_pkg.utils
+skinparam classAttributeIconSize 0
+skinparam classFontStyle bold
+hide empty members
+class CacheManager {
+    + max_size : int
+    # _store : dict[str, object]
+    --
+    + __init__(max_size: int)
+    + get(key: str) : object | None
+    + set(key: str, value: object) : None
+    + clear() : None
+}
+note top of CacheManager
+  Gestionnaire cache simple.
+end note
+@enduml

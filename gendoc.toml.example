@@ -1,0 +1,45 @@
+# gendoc.toml - Configuration exemple pour gendoc
+# Placez ce fichier à la racine de votre projet ou spécifiez --config
+
+[gendoc]
+# === Entrée ===
+# Chemin vers le package à documenter (dossier ou fichier)
+package_path = "./example/example_pkg"
+# Nom du package (auto-détecté si non précisé)
+package_name = "example_pkg"
+
+# === Sortie ===
+# Dossier où MkDocs va générer le site HTML final
+output_dir = "site"
+# Dossier sources markdown (sera créé)
+docs_dir = "docs"
+# Formats de sortie: mmd (Mermaid), puml (PlantUML), svg, png
+formats = ["mmd", "puml", "svg"]
+
+# === Filtrage ===
+# Patterns à exclure (glob style, ex: test_*, *_test.py, tests)
+exclude_patterns = ["test_*", "*_test.py", "tests", "__pycache__", "build", "dist", ".venv"]
+# Inclure fichiers commençant par _ ?
+include_private = false
+# Inclure dossiers tests ?
+include_tests = false
+# Filtrer uniquement membres publics (sans _)
+public_only = false
+# Profondeur max héritage affichée (None = illimité)
+inheritance_depth = 3
+
+# === Diagrammes ciblés ===
+# Générer un diagramme centré sur une classe et N niveaux de collaborateurs
+# Utile pour éviter diagrammes géants illisibles
+# focus_class = "Order"
+# focus_depth = 2
+
+# === Site ===
+site_name = "Ma Documentation"
+theme = "material"
+enable_mermaid = true
+# URL repo pour MkDocs Material
+repo_url = "https://github.com/username/repo"
+
+# === Performance ===
+max_workers = 4
