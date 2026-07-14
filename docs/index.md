@@ -1,6 +1,6 @@
 # example_pkg - Documentation
 
-> Généré automatiquement par **gendoc** le 2026-07-14 12:23
+> Généré automatiquement par **gendoc** le 2026-07-14 12:32
 
 ## Vue d'ensemble
 
@@ -31,8 +31,8 @@ flowchart TD
     example_pkg_utils[utils]
 
     example_pkg --> example_pkg_models
-    example_pkg --> example_pkg_utils
     example_pkg --> example_pkg_services
+    example_pkg --> example_pkg_utils
     example_pkg_services --> example_pkg_models
     example_pkg_services --> example_pkg_utils
     example_pkg_circular_a -->|circular| example_pkg_circular_b

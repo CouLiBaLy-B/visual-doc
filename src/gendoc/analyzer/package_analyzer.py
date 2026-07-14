@@ -57,7 +57,7 @@ def get_module_dotted_path(file_path: Path, root_path: Path, package_name: str) 
 
 
 def analyze_package(
-    root_path: Path,
+    root_path: Path | str,
     package_name: Optional[str] = None,
     exclude_patterns: Optional[list[str]] = None,
     include_private: bool = False,
@@ -65,7 +65,7 @@ def analyze_package(
 ) -> PackageInfo:
     """Analyse un package Python complet."""
 
-    root_path = root_path.resolve()
+    root_path = Path(root_path).resolve()
     if not root_path.exists():
         raise ValueError(f"Chemin introuvable: {root_path}")
 
