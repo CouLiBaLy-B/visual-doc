@@ -1,6 +1,0 @@
-@startuml
-title Module example_pkg
-skinparam classAttributeIconSize 0
-skinparam classFontStyle bold
-hide empty members
-@enduml
