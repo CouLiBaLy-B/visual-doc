@@ -15,34 +15,38 @@ classifiers = [
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Software Development :: Documentation",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
+# Cœur volontairement léger : l'usage librairie (analyse + diagrammes)
+# ne tire pas la pile MkDocs, disponible via l'extra [site].
 dependencies = [
   "click>=8.1",
   "rich>=13.0",
   "jinja2>=3.0",
+]
+
+[project.optional-dependencies]
+site = [
   "mkdocs>=1.5",
   "mkdocs-material>=9.0",
   "mkdocstrings[python]>=0.25",
   "pymdown-extensions>=10.0",
 ]
-
-[project.optional-dependencies]
+svg = [
+  "cairosvg>=2.7",
+]
+all = [
+  "gendoc[site,svg]",
+]
 dev = [
   "pytest>=8.0",
   "pytest-cov>=5.0",
   "ruff>=0.3",
   "mypy>=1.0",
-]
-svg = [
-  "cairosvg>=2.7",
-]
-all = [
-  "cairosvg>=2.7",
 ]
 
 [project.urls]
@@ -62,7 +66,8 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "--cov=gendoc --cov-report=term-missing --cov-report=html --cov-fail-under=80"
+# la couverture est exigée en CI (voir .github/workflows/ci.yml) ;
+# un `pytest` nu doit fonctionner sans pytest-cov installé
 
 [tool.coverage.run]
 source = ["src/gendoc"]
@@ -70,14 +75,14 @@ branch = true
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "C4", "UP"]
 ignore = []
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true

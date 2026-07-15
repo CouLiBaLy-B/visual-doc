@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Ruff
+        run: ruff check src tests
+      - name: Mypy
+        run: mypy src
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: pip install -e ".[dev,site]"
+      - name: Tests + couverture
+        run: pytest --cov=gendoc --cov-report=term-missing --cov-fail-under=80
+
+  docs:
+    # Vérifie le pipeline de bout en bout sur le package d'exemple :
+    # analysable, docs générées, site MkDocs construit.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e ".[site]"
+      - name: gendoc check
+        run: gendoc check ./example/example_pkg
+      - name: gendoc build
+        run: gendoc build ./example/example_pkg --site-name "Demo gendoc"
+      - name: Upload site
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-site
+          path: site/
+          if-no-files-found: error

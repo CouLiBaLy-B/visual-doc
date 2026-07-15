@@ -17,16 +17,17 @@ Tout est 100% local, sans appel réseau.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Union
 
 from .analyzer import analyze_package, get_focused_subgraph
 from .analyzer.models import PackageInfo
-from .config import GendocConfig, load_config
 from .builder import SiteBuilder
+from .config import GendocConfig
 from .renderers import (
     generate_class_diagram_mermaid,
     generate_class_diagram_plantuml,
     generate_class_diagram_svg,
+    generate_module_class_diagram_mermaid,
+    generate_module_class_diagram_plantuml,
     generate_package_diagram_mermaid,
     generate_package_diagram_plantuml,
     generate_package_diagram_svg,
@@ -34,11 +35,13 @@ from .renderers import (
 
 
 def analyze(
-    package_path: Union[str, Path],
-    package_name: Optional[str] = None,
-    exclude_patterns: Optional[list[str]] = None,
+    package_path: str | Path,
+    package_name: str | None = None,
+    exclude_patterns: list[str] | None = None,
     include_private: bool = False,
     public_only: bool = False,
+    include_tests: bool = False,
+    strict: bool = False,
 ) -> PackageInfo:
     """Analyse un package et retourne les infos structurées.
 
@@ -46,27 +49,36 @@ def analyze(
         package_path: Chemin vers le package.
         package_name: Nom du package (auto-détecté sinon).
         exclude_patterns: Patterns à exclure.
-        include_private: Inclure fichiers/membres privés.
-        public_only: Filtrer uniquement membres publics pour diagrammes.
+        include_private: Inclure classes/fonctions privées (préfixe `_`).
+        public_only: Retirer les membres non publics des classes retournées.
+        include_tests: Inclure les fichiers de tests.
+        strict: Échouer si un fichier n'est pas parsable (sinon PackageInfo.errors).
 
     Returns:
         PackageInfo avec modules, classes, relations, dépendances circulaires.
     """
-    return analyze_package(
+    pkg = analyze_package(
         root_path=Path(package_path),
         package_name=package_name,
         exclude_patterns=exclude_patterns,
         include_private=include_private,
+        include_tests=include_tests,
+        strict=strict,
     )
+    if public_only:
+        for cls in pkg.classes.values():
+            cls.attributes = [a for a in cls.attributes if a.visibility.value == "public"]
+            cls.methods = [m for m in cls.methods if m.visibility.value == "public"]
+    return pkg
 
 
 def build_docs(
-    package_path: Union[str, Path],
-    output_dir: Union[str, Path] = "site",
-    docs_dir: Union[str, Path] = "docs",
-    formats: Optional[list[str]] = None,
+    package_path: str | Path,
+    output_dir: str | Path = "site",
+    docs_dir: str | Path = "docs",
+    formats: list[str] | None = None,
     public_only: bool = False,
-    focus_class: Optional[str] = None,
+    focus_class: str | None = None,
     focus_depth: int = 2,
     site_name: str = "Documentation",
 ) -> Path:
@@ -123,18 +135,20 @@ def build_docs_with_config(config: GendocConfig) -> Path:
 
 
 def get_diagrams(
-    package_path: Union[str, Path],
+    package_path: str | Path | None = None,
     diagram_format: str = "mermaid",
-    focus_class: Optional[str] = None,
+    focus_class: str | None = None,
     depth: int = 2,
+    package_info: PackageInfo | None = None,
 ) -> dict[str, str]:
     """Retourne les diagrammes sous forme de strings (lib usage).
 
     Args:
-        package_path: Chemin package.
+        package_path: Chemin package (ignoré si package_info est fourni).
         diagram_format: "mermaid" ou "plantuml" ou "svg".
         focus_class: Si défini, retourne sous-graphe centré.
         depth: Profondeur pour focus.
+        package_info: Résultat d'une analyse déjà faite, pour éviter de ré-analyser.
 
     Returns:
         Dict {nom: contenu diagramme}.
@@ -145,7 +159,12 @@ def get_diagrams(
         >>> print(diags["package"])
         >>> print(diags["classes"])
     """
-    pkg = analyze_package(Path(package_path))
+    if package_info is not None:
+        pkg = package_info
+    else:
+        if package_path is None:
+            raise ValueError("package_path ou package_info est requis")
+        pkg = analyze_package(Path(package_path))
 
     result: dict[str, str] = {}
 
@@ -164,7 +183,9 @@ def get_diagrams(
 
     # Focus si demandé
     if focus_class:
-        focused_classes, focused_rels = get_focused_subgraph(pkg.classes, pkg.relations, focus_class, depth)
+        focused_classes, focused_rels = get_focused_subgraph(
+            pkg.classes, pkg.relations, focus_class, depth
+        )
         if diagram_format == "mermaid":
             result[f"focus_{focus_class}"] = generate_class_diagram_mermaid(
                 focused_classes, focused_rels, title=f"Focus {focus_class}"
@@ -182,14 +203,10 @@ def get_diagrams(
     for dotted, mod in pkg.modules.items():
         safe = dotted.replace(".", "_")
         if diagram_format == "mermaid":
-            from .renderers import generate_module_class_diagram_mermaid
-
             result[f"module_{safe}"] = generate_module_class_diagram_mermaid(
                 dotted, mod.classes, pkg.relations
             )
         elif diagram_format == "plantuml":
-            from .renderers import generate_module_class_diagram_plantuml
-
             result[f"module_{safe}"] = generate_module_class_diagram_plantuml(
                 dotted, mod.classes, pkg.relations
             )
@@ -200,7 +217,7 @@ def get_diagrams(
     return result
 
 
-def check_package(package_path: Union[str, Path]) -> bool:
+def check_package(package_path: str | Path) -> bool:
     """Vérifie si package analysable (pour CI ou lib).
 
     Returns:
@@ -219,7 +236,7 @@ def check_package(package_path: Union[str, Path]) -> bool:
 
 
 # API legacy / pratique pour notebooks
-def quick_overview(package_path: Union[str, Path]) -> str:
+def quick_overview(package_path: str | Path) -> str:
     """Retourne résumé texte rapide pour affichage.
 
     Example:
@@ -234,9 +251,11 @@ def quick_overview(package_path: Union[str, Path]) -> str:
         f"Circular deps: {len(pkg.circular_dependencies)}",
     ]
     if pkg.circular_dependencies:
+        from .analyzer.relationships import cycle_display
+
         lines.append("Cycles:")
         for cycle in pkg.circular_dependencies:
-            lines.append(f"  - {' -> '.join(cycle)}")
+            lines.append(f"  - {cycle_display(cycle)}")
     lines.append("\nModules:")
     for mod in sorted(pkg.modules.keys()):
         lines.append(f"  - {mod} ({len(pkg.modules[mod].classes)} classes)")

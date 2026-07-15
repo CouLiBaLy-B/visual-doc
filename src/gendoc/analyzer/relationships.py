@@ -1,34 +1,141 @@
-"""Détection des relations entre classes."""
+"""Détection des relations entre classes et des cycles de dépendances."""
 from __future__ import annotations
 
+import ast
+import re
 from collections import defaultdict, deque
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .models import ClassInfo, RelationInfo
+    from .models import ClassInfo
 
-from .models import RelationType, RelationInfo
+from .models import RelationInfo, RelationType
+
+# Noms de types à ignorer lors de l'extraction (builtins + typing)
+_IGNORED_TYPE_NAMES = {
+    "Optional", "Union", "Any", "None", "Self", "ClassVar", "Final", "Literal",
+    "Annotated", "Type", "type", "object",
+    "str", "int", "float", "bool", "bytes", "bytearray", "complex",
+    "list", "dict", "set", "tuple", "frozenset",
+    "List", "Dict", "Set", "Tuple", "FrozenSet",
+    "Callable", "Iterable", "Iterator", "Sequence", "Mapping", "MutableMapping",
+    "MutableSequence", "Collection", "Generator", "Awaitable", "Coroutine",
+    "typing", "collections", "abc",
+}
+
+# Types conteneurs : un type projet dans leur subscript = agrégation
+_COLLECTION_TYPES = {
+    "list", "List", "set", "Set", "frozenset", "FrozenSet", "tuple", "Tuple",
+    "dict", "Dict", "Mapping", "MutableMapping", "defaultdict", "OrderedDict",
+    "Sequence", "MutableSequence", "Collection", "Iterable", "deque",
+}
 
 
-def detect_relationships(classes: list["ClassInfo"]) -> list["RelationInfo"]:
-    """Détecte les relations entre classes: héritage, composition, etc."""
+def _node_simple_name(node: ast.AST) -> str:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return ""
+
+
+def _classify_annotation_types(annotation: str) -> dict[str, bool]:
+    """Extrait les noms de types d'une annotation via l'AST.
+
+    Returns:
+        dict {nom de type: True si le nom apparaît dans un conteneur (list[X], ...)}.
+    """
+    try:
+        tree = ast.parse(annotation, mode="eval")
+    except SyntaxError:
+        # annotation non parsable : fallback regex, sans info de conteneur
+        tokens = re.findall(r"[A-Za-z_][A-Za-z0-9_]*", annotation)
+        return dict.fromkeys(tokens, False)
+
+    result: dict[str, bool] = {}
+
+    def visit(node: ast.AST, in_collection: bool) -> None:
+        if isinstance(node, ast.Subscript):
+            base_name = _node_simple_name(node.value)
+            visit(node.value, in_collection)
+            visit(node.slice, in_collection or base_name in _COLLECTION_TYPES)
+        elif isinstance(node, ast.Name):
+            result[node.id] = result.get(node.id, False) or in_collection
+        elif isinstance(node, ast.Attribute):
+            result[node.attr] = result.get(node.attr, False) or in_collection
+        elif isinstance(node, ast.BinOp):
+            visit(node.left, in_collection)
+            visit(node.right, in_collection)
+        elif isinstance(node, (ast.Tuple, ast.List)):
+            for elt in node.elts:
+                visit(elt, in_collection)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            # forward reference imbriquée : list["User"]
+            try:
+                visit(ast.parse(node.value, mode="eval").body, in_collection)
+            except SyntaxError:
+                pass
+
+    visit(tree.body, False)
+    return result
+
+
+def _extract_types_from_annotation(annotation: str) -> list[str]:
+    """Extrait les noms de types candidats (hors builtins/typing) d'une annotation."""
+    return [t for t in _classify_annotation_types(annotation) if t not in _IGNORED_TYPE_NAMES]
+
+
+def _resolve_simple(
+    simple: str,
+    name_map: dict[str, list[str]],
+    current_module: str | None,
+) -> str | None:
+    """Résout un nom simple vers un nom qualifié : module courant d'abord, puis ordre trié."""
+    candidates = sorted(name_map.get(simple, ()))
+    if not candidates:
+        return None
+    if current_module:
+        exact_local = f"{current_module}.{simple}"
+        if exact_local in candidates:
+            return exact_local
+        prefixed = [c for c in candidates if c.startswith(current_module + ".")]
+        if prefixed:
+            return prefixed[0]
+    return candidates[0]
+
+
+def _resolve_class_name(
+    name: str,
+    name_map: dict[str, list[str]],
+    qualified_set: set[str],
+    current_module: str | None = None,
+) -> str | None:
+    """Résout un nom de classe (simple, qualifié ou générique) vers un nom qualifié."""
+    clean = name.split("[")[0]
+    if clean in qualified_set:
+        return clean
+    if "." in clean:
+        suffix_matches = sorted(q for q in qualified_set if q.endswith(f".{clean}"))
+        if suffix_matches:
+            return suffix_matches[0]
+    return _resolve_simple(clean.split(".")[-1], name_map, current_module)
+
+
+def detect_relationships(classes: list[ClassInfo]) -> list[RelationInfo]:
+    """Détecte les relations : héritage, composition, agrégation, association, dépendance."""
     relations: list[RelationInfo] = []
-    # Map simple name -> qualified names
+
     name_to_qualified: dict[str, list[str]] = defaultdict(list)
     for cls in classes:
-        name_to_qualified[cls.name].append(cls.qualified_name)
-        # aussi dotted path sans module? On mappe
-
+        name_to_qualified[cls.name.split(".")[-1]].append(cls.qualified_name)
     qualified_set = {c.qualified_name for c in classes}
-    simple_names = {c.name for c in classes}
 
-    for cls in classes:
+    # ordre stable quel que soit l'ordre d'entrée
+    for cls in sorted(classes, key=lambda c: c.qualified_name):
         # Héritage
         for base in cls.bases:
-            # base peut être simple ou qualified
-            base_simple = base.split(".")[-1].split("[")[0]  # enlever generics
-            target = _resolve_class_name(base, name_to_qualified, qualified_set)
-            if target:
+            target = _resolve_class_name(base, name_to_qualified, qualified_set, cls.module)
+            if target and target != cls.qualified_name:
                 relations.append(
                     RelationInfo(
                         source=cls.qualified_name,
@@ -36,93 +143,76 @@ def detect_relationships(classes: list["ClassInfo"]) -> list["RelationInfo"]:
                         relation_type=RelationType.INHERITANCE,
                     )
                 )
-            elif base_simple in simple_names:
-                # base dans projet mais pas résolu directement, prendre premier
-                candidates = name_to_qualified.get(base_simple, [])
-                if candidates:
-                    relations.append(
-                        RelationInfo(
-                            source=cls.qualified_name,
-                            target=candidates[0],
-                            relation_type=RelationType.INHERITANCE,
-                        )
-                    )
 
-        # Composition / Association via attributs
+        # Composition / agrégation / association via attributs typés
         for attr in cls.attributes:
             if not attr.type_annotation:
                 continue
-            # nettoyer annotation
-            ann = attr.type_annotation
-            # enlever Optional, List, etc pour extraire classe
-            possible_types = _extract_types_from_annotation(ann)
-            for p_type in possible_types:
-                if p_type in simple_names:
-                    # éviter self-reference inutile ? mais garder
-                    target_candidates = name_to_qualified.get(p_type, [])
-                    for target in target_candidates:
-                        if target == cls.qualified_name:
-                            continue
-                        # déterminer si composition ou association
-                        # heuristique: si attribut créé dans __init__ ou avec default new => composition
-                        # sinon association
-                        rel_type = RelationType.COMPOSITION
-                        # Si le type est dans une collection (List[X]), on considère aggregation
-                        if any(x in ann for x in ["List", "list", "Sequence", "Set", "Collection"]):
-                            rel_type = RelationType.AGGREGATION
-                        relations.append(
-                            RelationInfo(
-                                source=cls.qualified_name,
-                                target=target,
-                                relation_type=rel_type,
-                                label=attr.name,
-                            )
-                        )
-
-        # Dépendance via méthodes paramètres / return
-        for method in cls.methods:
-            # paramètres
-            for _, param_type in method.parameters:
-                if not param_type:
+            type_flags = _classify_annotation_types(attr.type_annotation)
+            for type_name, in_collection in type_flags.items():
+                if type_name in _IGNORED_TYPE_NAMES:
                     continue
-                types = _extract_types_from_annotation(param_type)
-                for t in types:
-                    if t in simple_names and t != cls.name:
-                        cand = name_to_qualified.get(t, [])
-                        for target in cand:
-                            # ne pas dupliquer si déjà composition
-                            if not any(
-                                r.source == cls.qualified_name
-                                and r.target == target
-                                and r.relation_type in (RelationType.COMPOSITION, RelationType.AGGREGATION)
-                                for r in relations
-                            ):
-                                relations.append(
-                                    RelationInfo(
-                                        source=cls.qualified_name,
-                                        target=target,
-                                        relation_type=RelationType.DEPENDENCY,
-                                        label=f"{method.name} param",
-                                    )
-                                )
-            # return type
-            if method.return_type:
-                types = _extract_types_from_annotation(method.return_type)
-                for t in types:
-                    if t in simple_names and t != cls.name:
-                        cand = name_to_qualified.get(t, [])
-                        for target in cand:
-                            relations.append(
-                                RelationInfo(
-                                    source=cls.qualified_name,
-                                    target=target,
-                                    relation_type=RelationType.DEPENDENCY,
-                                    label=f"{method.name} return",
-                                )
-                            )
+                target = _resolve_simple(type_name, name_to_qualified, cls.module)
+                if not target or target == cls.qualified_name:
+                    continue
+                if in_collection:
+                    # collection d'instances : agrégation
+                    rel_type = RelationType.AGGREGATION
+                elif attr.default and attr.default.startswith(f"{type_name}("):
+                    # instance construite par la classe : composition
+                    rel_type = RelationType.COMPOSITION
+                else:
+                    # simple référence (paramètre stocké, champ dataclass) : association
+                    rel_type = RelationType.ASSOCIATION
+                relations.append(
+                    RelationInfo(
+                        source=cls.qualified_name,
+                        target=target,
+                        relation_type=rel_type,
+                        label=attr.name,
+                    )
+                )
 
-    # Dédupliquer
-    seen = set()
+        # Dépendances via paramètres et retours de méthodes
+        attr_related = {
+            (r.source, r.target)
+            for r in relations
+            if r.relation_type
+            in (RelationType.COMPOSITION, RelationType.AGGREGATION, RelationType.ASSOCIATION)
+        }
+
+        def add_dependency(
+            annotation: str,
+            label: str,
+            current: ClassInfo,
+            existing: set[tuple[str, str]],
+        ) -> None:
+            for type_name in _extract_types_from_annotation(annotation):
+                if type_name == current.name.split(".")[-1]:
+                    continue
+                target = _resolve_simple(type_name, name_to_qualified, current.module)
+                if not target or target == current.qualified_name:
+                    continue
+                if (current.qualified_name, target) in existing:
+                    continue
+                relations.append(
+                    RelationInfo(
+                        source=current.qualified_name,
+                        target=target,
+                        relation_type=RelationType.DEPENDENCY,
+                        label=label,
+                    )
+                )
+
+        for method in cls.methods:
+            for _, param_type in method.parameters:
+                if param_type:
+                    add_dependency(param_type, f"{method.name} param", cls, attr_related)
+            if method.return_type:
+                add_dependency(method.return_type, f"{method.name} return", cls, attr_related)
+
+    # Dédupliquer (source, target, type)
+    seen: set[tuple[str, str, RelationType]] = set()
     deduped: list[RelationInfo] = []
     for r in relations:
         key = (r.source, r.target, r.relation_type)
@@ -132,161 +222,115 @@ def detect_relationships(classes: list["ClassInfo"]) -> list["RelationInfo"]:
     return deduped
 
 
-def _resolve_class_name(name: str, name_map: dict[str, list[str]], qualified_set: set[str]) -> str | None:
-    """Résout un nom de classe vers qualified name."""
-    # nettoyer generics
-    clean = name.split("[")[0].split(".")[-1]
-    if name in qualified_set:
-        return name
-    # chercher qualified qui finit par name
-    for q in qualified_set:
-        if q.endswith(f".{name}") or q.endswith(f".{clean}"):
-            return q
-    # chercher via map
-    if clean in name_map:
-        return name_map[clean][0]
-    return None
-
-
-def _extract_types_from_annotation(annotation: str) -> list[str]:
-    """Extrait les noms de types d'une annotation."""
-    # Très simplifié: split par caractères non identifiants
-    # Ex: "Optional[List[MyClass]]" -> ["Optional", "List", "MyClass"]
-    # On veut seulement les types qui pourraient être des classes (CamelCase)
-    import re
-
-    # Retirer les strings
-    # Trouver tous les identifiants
-    tokens = re.findall(r"[A-Za-z_][A-Za-z0-9_]*", annotation)
-    # Filtrer les builtins et typing keywords
-    ignore = {
-        "Optional",
-        "List",
-        "Dict",
-        "Set",
-        "Tuple",
-        "Union",
-        "Any",
-        "str",
-        "int",
-        "float",
-        "bool",
-        "bytes",
-        "None",
-        "list",
-        "dict",
-        "set",
-        "tuple",
-        "Callable",
-        "Iterable",
-        "Sequence",
-        "Mapping",
-        "Type",
-        "ClassVar",
-        "Final",
-        "Literal",
-        "Annotated",
-        "Self",
-    }
-    return [t for t in tokens if t not in ignore and len(t) > 1]
-
-
 def detect_circular_dependencies(dependencies: dict[str, set[str]]) -> list[list[str]]:
-    """Détecte les dépendances circulaires via DFS."""
+    """Détecte les cycles de dépendances (DFS itératif, cycles normalisés sans doublon).
 
+    Chaque cycle est retourné sous forme canonique : rotation lexicographiquement
+    minimale, sans répéter le premier nœud à la fin.
+    """
     cycles: list[list[str]] = []
+    seen_cycles: set[tuple[str, ...]] = set()
     visited: set[str] = set()
-    rec_stack: list[str] = []
-    on_stack: set[str] = set()
 
-    def dfs(node: str) -> None:
-        visited.add(node)
-        rec_stack.append(node)
-        on_stack.add(node)
+    for start in sorted(dependencies):
+        if start in visited:
+            continue
+        visited.add(start)
+        path = [start]
+        on_stack = {start}
+        stack: list[tuple[str, list[str]]] = [(start, sorted(dependencies.get(start, ())))]
 
-        for neighbor in dependencies.get(node, set()):
-            if neighbor not in visited:
-                dfs(neighbor)
-            elif neighbor in on_stack:
-                # cycle trouvé
-                idx = rec_stack.index(neighbor)
-                cycle = rec_stack[idx:] + [neighbor]
-                # normaliser cycle pour éviter doublons
-                # utiliser tuple trié minimal ?
-                if cycle not in cycles and list(reversed(cycle)) not in cycles:
-                    # éviter doublons rotationnels
-                    normalized = _normalize_cycle(cycle)
-                    if normalized not in [tuple(c) for c in cycles]:
-                        cycles.append(cycle)
-
-        rec_stack.pop()
-        on_stack.remove(node)
-
-    for node in dependencies:
-        if node not in visited:
-            dfs(node)
+        while stack:
+            node, neighbors = stack[-1]
+            advanced = False
+            while neighbors:
+                neighbor = neighbors.pop(0)
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    on_stack.add(neighbor)
+                    path.append(neighbor)
+                    stack.append((neighbor, sorted(dependencies.get(neighbor, ()))))
+                    advanced = True
+                    break
+                if neighbor in on_stack:
+                    cycle = path[path.index(neighbor):]
+                    key = _normalize_cycle(cycle)
+                    if key and key not in seen_cycles:
+                        seen_cycles.add(key)
+                        cycles.append(list(key))
+            if not advanced:
+                stack.pop()
+                on_stack.discard(node)
+                path.pop()
 
     return cycles
 
 
 def _normalize_cycle(cycle: list[str]) -> tuple[str, ...]:
-    """Normalise un cycle pour comparaison (rotation min)."""
+    """Normalise un cycle pour comparaison : sans endpoint dupliqué, rotation minimale."""
     if not cycle:
-        return tuple()
-    # enlever dernier doublon si même que premier
-    if cycle[0] == cycle[-1]:
+        return ()
+    if len(cycle) > 1 and cycle[0] == cycle[-1]:
         cycle = cycle[:-1]
     if not cycle:
-        return tuple()
-    # trouver rotation lexicographiquement minimale
+        return ()
     n = len(cycle)
     rotations = [tuple(cycle[i:] + cycle[:i]) for i in range(n)]
     return min(rotations)
 
 
+def cycle_display(cycle: list[str]) -> str:
+    """Formate un cycle pour affichage en refermant la boucle : a -> b -> a."""
+    if not cycle:
+        return ""
+    if len(cycle) == 1:
+        return f"{cycle[0]} -> {cycle[0]}"
+    return " -> ".join([*cycle, cycle[0]])
+
+
 def get_focused_subgraph(
-    package_classes: dict[str, "ClassInfo"],
-    relations: list["RelationInfo"],
+    package_classes: dict[str, ClassInfo],
+    relations: list[RelationInfo],
     focus_class: str,
     depth: int = 2,
-) -> tuple[dict[str, "ClassInfo"], list["RelationInfo"]]:
-    """Retourne sous-graphe centré sur une classe à N niveaux."""
-    # Résoudre focus_class
+) -> tuple[dict[str, ClassInfo], list[RelationInfo]]:
+    """Retourne le sous-graphe (non dirigé) centré sur une classe, à N niveaux."""
     focus_qualified = None
-    # chercher par nom simple ou qualified
     if focus_class in package_classes:
         focus_qualified = focus_class
     else:
-        # chercher par simple name
-        candidates = [q for q in package_classes if q.endswith(f".{focus_class}") or q.split(".")[-1] == focus_class]
+        candidates = sorted(
+            q
+            for q in package_classes
+            if q.endswith(f".{focus_class}") or q.split(".")[-1] == focus_class
+        )
         if candidates:
             focus_qualified = candidates[0]
         else:
-            raise ValueError(f"Classe focus '{focus_class}' non trouvée. Classes disponibles: {list(package_classes.keys())[:10]}")
+            available = ", ".join(sorted(package_classes)[:10])
+            raise ValueError(
+                f"Classe focus '{focus_class}' non trouvée. Classes disponibles: {available}"
+            )
 
-    # BFS
-    visited = {focus_qualified}
-    queue = deque([(focus_qualified, 0)])
-    # adj list
     adj: dict[str, set[str]] = defaultdict(set)
     for rel in relations:
         adj[rel.source].add(rel.target)
-        # pour graphe non dirigé pour focus, ajouter aussi reverse
         adj[rel.target].add(rel.source)
 
+    visited = {focus_qualified}
     collected = {focus_qualified}
+    queue = deque([(focus_qualified, 0)])
 
     while queue:
         current, d = queue.popleft()
         if d >= depth:
             continue
-        for neighbor in adj.get(current, []):
+        for neighbor in sorted(adj.get(current, ())):
             if neighbor not in visited:
                 visited.add(neighbor)
                 collected.add(neighbor)
                 queue.append((neighbor, d + 1))
 
-    # filtrer classes et relations
     focused_classes = {q: package_classes[q] for q in collected if q in package_classes}
     focused_relations = [r for r in relations if r.source in collected and r.target in collected]
 

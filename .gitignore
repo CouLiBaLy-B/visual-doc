@@ -18,10 +18,12 @@ htmlcov/
 .tox/
 .nox/
 
-# Docs builds (site HTML final est généré)
+# Docs builds (tout est régénéré par `gendoc build` ; la démo est construite en CI)
 site/
 site_html/
 docs_html/
+/docs/
+/mkdocs.yml
 
 # MkDocs cache
 .cache/
@@ -37,6 +39,3 @@ docs_html/
 .DS_Store
 Thumbs.db
 
-# Generated diagrams preview (optional)
-# docs/diagrams/
-# Keep docs for demo, but ignore site

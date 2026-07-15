@@ -7,8 +7,14 @@ Installation:
     pip install -e .  # depuis la racine du projet gendoc
 """
 
-import gendoc
+import tempfile
 from pathlib import Path
+
+import gendoc
+
+# Les sorties de démonstration vont dans un dossier temporaire,
+# pas dans votre projet.
+OUT = Path(tempfile.mkdtemp(prefix="gendoc_demo_"))
 
 # ------------------------------------------------------------
 # 1. Analyse simple
@@ -56,8 +62,8 @@ print(focus_diags["focus_Order"][:800])
 print("\n=== 4. Build docs site ===")
 docs_path = gendoc.build_docs(
     "./example/example_pkg",
-    output_dir="./site_lib",
-    docs_dir="./docs_lib",
+    output_dir=OUT / "site_lib",
+    docs_dir=OUT / "docs_lib",
     formats=["mmd", "puml", "svg"],
     site_name="Demo lib usage",
 )
@@ -70,10 +76,10 @@ print(f"Diagrams: {list((docs_path / 'diagrams').glob('*.mmd'))[:3]}")
 # ------------------------------------------------------------
 print("\n=== 5. Usage avancé avec GendocConfig ===")
 cfg = gendoc.GendocConfig(
-    package_path=Path("./example/example_pkg"),
+    package_path="./example/example_pkg",  # str accepté, converti en Path
     package_name="example_pkg",
-    output_dir=Path("./site_advanced"),
-    docs_dir=Path("./docs_advanced"),
+    output_dir=OUT / "site_advanced",
+    docs_dir=OUT / "docs_advanced",
     formats=["mmd", "svg"],
     public_only=True,  # uniquement membres publics
     focus_class="OrderService",
@@ -103,7 +109,7 @@ print("\n=== 7. Exemple intégration ===")
 
 def my_custom_doc_generator(package_path: str):
     """Votre propre générateur qui utilise gendoc comme brique."""
-    pkg = gendoc.analyze("./example/example_pkg", include_private=False)
+    pkg = gendoc.analyze(package_path, include_private=False)
 
     # Votre logique custom
     report = {

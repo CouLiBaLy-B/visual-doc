@@ -17,16 +17,15 @@ docs_dir = "docs"
 formats = ["mmd", "puml", "svg"]
 
 # === Filtrage ===
-# Patterns à exclure (glob style, ex: test_*, *_test.py, tests)
+# Patterns à exclure : comparés aux segments du chemin (fnmatch),
+# ex: "tests" exclut le dossier tests/ mais pas attestation.py
 exclude_patterns = ["test_*", "*_test.py", "tests", "__pycache__", "build", "dist", ".venv"]
-# Inclure fichiers commençant par _ ?
+# Inclure classes/fonctions préfixées par _ ?
 include_private = false
-# Inclure dossiers tests ?
+# Inclure dossiers/fichiers de tests ?
 include_tests = false
-# Filtrer uniquement membres publics (sans _)
+# Ne montrer que les membres publics dans les diagrammes
 public_only = false
-# Profondeur max héritage affichée (None = illimité)
-inheritance_depth = 3
 
 # === Diagrammes ciblés ===
 # Générer un diagramme centré sur une classe et N niveaux de collaborateurs
@@ -37,9 +36,7 @@ inheritance_depth = 3
 # === Site ===
 site_name = "Ma Documentation"
 theme = "material"
-enable_mermaid = true
+# Plugin de recherche MkDocs
+enable_search = true
 # URL repo pour MkDocs Material
 repo_url = "https://github.com/username/repo"
-
-# === Performance ===
-max_workers = 4

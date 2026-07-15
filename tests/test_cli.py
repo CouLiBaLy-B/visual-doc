@@ -46,11 +46,7 @@ def test_cli_check_failure(tmp_path: Path):
 
 def test_cli_build(temp_package: Path, tmp_path: Path):
     runner = CliRunner()
-    with runner.isolated_filesystem(temp_dir=tmp_path) as td:
-        # td est un Path temporaire ? isolated_filesystem donne string path mais context
-        # On est déjà dans temp, utilisons temp_package qui est hors de ce filesystem
-        # Donc besoin de recréer package dans isolated fs
-        # Simplifions: on teste via invoke direct avec output dans tmp_path
+    with runner.isolated_filesystem(temp_dir=tmp_path):
         import shutil
 
         # copier temp_package contenu dans cwd
@@ -80,6 +76,38 @@ def test_cli_init(tmp_path: Path):
         assert "package_path" in content
 
 
+def test_cli_build_respects_toml_package_path(temp_package: Path, tmp_path: Path):
+    """Sans argument CLI, le package_path du gendoc.toml doit être utilisé."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        cwd = Path.cwd()
+        (cwd / "gendoc.toml").write_text(
+            f'[gendoc]\npackage_path = "{temp_package}"\npackage_name = "testpkg"\n'
+        )
+
+        result = runner.invoke(cli, ["build", "--no-build-site"])
+
+        assert result.exit_code == 0, result.output
+        index = (cwd / "docs" / "index.md").read_text()
+        assert "testpkg" in index
+
+
+def test_cli_include_private_can_be_disabled(temp_package: Path, tmp_path: Path):
+    """--no-include-private doit pouvoir surcharger include_private=true du TOML."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        cwd = Path.cwd()
+        (cwd / "gendoc.toml").write_text(
+            f'[gendoc]\npackage_path = "{temp_package}"\npackage_name = "testpkg"\n'
+            "include_private = true\n"
+        )
+
+        result = runner.invoke(cli, ["build", "--no-include-private", "--no-build-site", "-v"])
+
+        assert result.exit_code == 0, result.output
+        assert "include_private=False" in result.output
+
+
 def test_cli_diagram(temp_package: Path, tmp_path: Path):
     runner = CliRunner()
     out = tmp_path / "diagrams_out"
@@ -88,3 +116,41 @@ def test_cli_diagram(temp_package: Path, tmp_path: Path):
     assert result.exit_code == 0
     assert (out / "package.mmd").exists()
     assert (out / "classes.mmd").exists()
+
+
+def test_cli_diagram_single_format(temp_package: Path, tmp_path: Path):
+    runner = CliRunner()
+    out = tmp_path / "diagrams_puml"
+    result = runner.invoke(
+        cli, ["diagram", str(temp_package), "--output", str(out), "--format", "plantuml"]
+    )
+
+    assert result.exit_code == 0
+    assert (out / "package.puml").exists()
+    assert not (out / "package.mmd").exists()
+
+
+def test_cli_build_focus_and_formats(temp_package: Path, tmp_path: Path):
+    """--focus génère la page focus ; --formats mmd n'écrit aucun SVG."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        cwd = Path.cwd()
+        result = runner.invoke(
+            cli,
+            [
+                "build",
+                str(temp_package),
+                "--focus",
+                "User",
+                "--depth",
+                "1",
+                "--formats",
+                "mmd",
+                "--no-build-site",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert (cwd / "docs" / "focus.md").exists()
+        assert (cwd / "docs" / "diagrams" / "focus_User.mmd").exists()
+        assert not list((cwd / "docs" / "diagrams").glob("*.svg"))

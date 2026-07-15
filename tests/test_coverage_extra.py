@@ -5,9 +5,9 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
-from gendoc.cli import cli
 from gendoc.analyzer import ast_parser, package_analyzer
-from gendoc.analyzer.models import get_visibility, Visibility
+from gendoc.analyzer.models import Visibility, get_visibility
+from gendoc.cli import cli
 from gendoc.renderers import svg
 
 
@@ -28,36 +28,33 @@ def test_annotation_to_str():
     assert ast_parser._annotation_to_str(None) is None
 
 
-def test_get_docstring():
-    import ast
-
+def test_function_docstring_extracted(tmp_path: Path):
     code = '''
 def foo():
     """Docstring test."""
     pass
 '''
-    tree = ast.parse(code)
-    func = tree.body[0]
-    doc = ast_parser._get_docstring(func)
-    assert doc == "Docstring test."
+    f = tmp_path / "mod.py"
+    f.write_text(code)
+    parsed = ast_parser.parse_module(f, "mod")
+    assert parsed.functions[0].docstring == "Docstring test."
 
 
-def test_class_visitor_infer():
-    visitor = ast_parser.ClassVisitor()
+def test_infer_type_from_value():
     import ast
 
     # List
     node = ast.parse("x = []").body[0].value
-    assert visitor._infer_type_from_value(node) == "list"
+    assert ast_parser._infer_type_from_value(node) == "list"
     # Dict
     node = ast.parse("x = {}").body[0].value
-    assert visitor._infer_type_from_value(node) == "dict"
+    assert ast_parser._infer_type_from_value(node) == "dict"
     # Constant
     node = ast.parse("x = 5").body[0].value
-    assert visitor._infer_type_from_value(node) == "int"
+    assert ast_parser._infer_type_from_value(node) == "int"
     # Call
     node = ast.parse("x = MyClass()").body[0].value
-    assert visitor._infer_type_from_value(node) == "MyClass"
+    assert ast_parser._infer_type_from_value(node) == "MyClass"
 
 
 def test_cli_build_with_mkdocs_mock(temp_package: Path, tmp_path: Path):
@@ -119,7 +116,9 @@ def test_svg_save_and_convert(tmp_path: Path):
 
     # Conversion peut échouer si cairosvg pas installé, mais ne doit pas crasher
     result = svg.try_convert_svg_to_png(svg_path, png_path)
-    # result bool, ok même si False
+    assert isinstance(result, bool)
+    if result:
+        assert png_path.exists()
 
 
 def test_package_analyzer_helpers():

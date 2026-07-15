@@ -2,19 +2,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Optional
 
 
-class Visibility(str, Enum):
+class Visibility(StrEnum):
     PUBLIC = "public"
     PRIVATE = "private"
     PROTECTED = "protected"
     DUNDER = "dunder"
 
 
-class RelationType(str, Enum):
+class RelationType(StrEnum):
     INHERITANCE = "inheritance"
     COMPOSITION = "composition"
     ASSOCIATION = "association"
@@ -22,32 +21,48 @@ class RelationType(str, Enum):
     AGGREGATION = "aggregation"
 
 
+_VISIBILITY_CHARS = {"public": "+", "private": "-", "protected": "#", "dunder": "+"}
+
+
+def _mermaid_safe_type(type_str: str) -> str:
+    """Adapte un type Python à la syntaxe des membres Mermaid.
+
+    Les génériques s'écrivent X~Y~ en Mermaid ; les accolades termineraient
+    le bloc de classe.
+    """
+    return (
+        type_str.replace("[", "~").replace("]", "~").replace("{", "(").replace("}", ")")
+    )
+
+
 @dataclass
 class AttributeInfo:
     """Représente un attribut de classe."""
 
     name: str
-    type_annotation: Optional[str] = None
-    default: Optional[str] = None
+    type_annotation: str | None = None
+    default: str | None = None
     visibility: Visibility = Visibility.PUBLIC
     is_class_attribute: bool = False
-    docstring: Optional[str] = None
+    docstring: str | None = None
 
     def is_private(self) -> bool:
         return self.visibility in (Visibility.PRIVATE, Visibility.DUNDER)
 
     def mermaid_str(self) -> str:
+        type_part = f" {_mermaid_safe_type(self.type_annotation)}" if self.type_annotation else ""
+        visibility_char = _VISIBILITY_CHARS.get(self.visibility.value, "+")
+        return f"{visibility_char}{self.name}{type_part}"
+
+    def plain_str(self) -> str:
+        """Représentation texte brut (SVG), types non transformés."""
         type_part = f" {self.type_annotation}" if self.type_annotation else ""
-        visibility_char = {"public": "+", "private": "-", "protected": "#", "dunder": "+"}.get(
-            self.visibility.value, "+"
-        )
+        visibility_char = _VISIBILITY_CHARS.get(self.visibility.value, "+")
         return f"{visibility_char}{self.name}{type_part}"
 
     def plantuml_str(self) -> str:
         type_part = f" : {self.type_annotation}" if self.type_annotation else ""
-        visibility_char = {"public": "+", "private": "-", "protected": "#", "dunder": "+"}.get(
-            self.visibility.value, "+"
-        )
+        visibility_char = _VISIBILITY_CHARS.get(self.visibility.value, "+")
         return f"{visibility_char} {self.name}{type_part}"
 
 
@@ -56,43 +71,55 @@ class MethodInfo:
     """Représente une méthode de classe."""
 
     name: str
-    parameters: list[tuple[str, Optional[str]]] = field(default_factory=list)  # (name, type)
-    return_type: Optional[str] = None
+    parameters: list[tuple[str, str | None]] = field(default_factory=list)  # (name, type)
+    return_type: str | None = None
     visibility: Visibility = Visibility.PUBLIC
     is_static: bool = False
     is_classmethod: bool = False
     is_property: bool = False
     is_abstract: bool = False
-    docstring: Optional[str] = None
+    is_async: bool = False
+    defaults: dict[str, str] = field(default_factory=dict)  # param -> valeur par défaut
+    docstring: str | None = None
 
     def is_private(self) -> bool:
         return self.visibility in (Visibility.PRIVATE, Visibility.DUNDER)
 
+    def _display_name(self) -> str:
+        return f"async {self.name}" if self.is_async else self.name
+
     def mermaid_signature(self) -> str:
-        visibility_char = {"public": "+", "private": "-", "protected": "#", "dunder": "+"}.get(
-            self.visibility.value, "+"
+        visibility_char = _VISIBILITY_CHARS.get(self.visibility.value, "+")
+        params = ", ".join(
+            f"{n}: {_mermaid_safe_type(t)}" if t else n
+            for n, t in self.parameters
+            if n != "self"
         )
-        params = ", ".join([f"{n}: {t}" if t else n for n, t in self.parameters if n != "self"])
-        ret = f" {self.return_type}" if self.return_type else ""
+        ret = f" {_mermaid_safe_type(self.return_type)}" if self.return_type else ""
         stereotype = ""
         if self.is_static:
             stereotype = "<<static>> "
         elif self.is_classmethod:
             stereotype = "<<classmethod>> "
-        return f"{visibility_char}{stereotype}{self.name}({params}){ret}"
+        return f"{visibility_char}{stereotype}{self._display_name()}({params}){ret}"
+
+    def plain_signature(self) -> str:
+        """Représentation texte brut (SVG), types non transformés."""
+        visibility_char = _VISIBILITY_CHARS.get(self.visibility.value, "+")
+        params = ", ".join(f"{n}: {t}" if t else n for n, t in self.parameters if n != "self")
+        ret = f" {self.return_type}" if self.return_type else ""
+        return f"{visibility_char}{self._display_name()}({params}){ret}"
 
     def plantuml_signature(self) -> str:
-        visibility_char = {"public": "+", "private": "-", "protected": "#", "dunder": "+"}.get(
-            self.visibility.value, "+"
-        )
-        params = ", ".join([f"{n}: {t}" if t else n for n, t in self.parameters if n != "self"])
+        visibility_char = _VISIBILITY_CHARS.get(self.visibility.value, "+")
+        params = ", ".join(f"{n}: {t}" if t else n for n, t in self.parameters if n != "self")
         ret = f" : {self.return_type}" if self.return_type else ""
         stereotype = ""
-        if self.is_static:
+        if self.is_static or self.is_classmethod:
             stereotype = "{static} "
-        elif self.is_classmethod:
-            stereotype = "{static} "
-        return f"{visibility_char} {stereotype}{self.name}({params}){ret}"
+        elif self.is_abstract:
+            stereotype = "{abstract} "
+        return f"{visibility_char} {stereotype}{self._display_name()}({params}){ret}"
 
 
 @dataclass
@@ -105,7 +132,7 @@ class ClassInfo:
     bases: list[str] = field(default_factory=list)
     attributes: list[AttributeInfo] = field(default_factory=list)
     methods: list[MethodInfo] = field(default_factory=list)
-    docstring: Optional[str] = None
+    docstring: str | None = None
     line_number: int = 0
 
     @property
@@ -127,10 +154,11 @@ class ModuleInfo:
     file_path: Path
     dotted_path: str
     classes: list[ClassInfo] = field(default_factory=list)
+    functions: list[MethodInfo] = field(default_factory=list)  # fonctions top-level
     imports: list[str] = field(default_factory=list)  # modules importés
     internal_imports: list[str] = field(default_factory=list)  # imports internes au projet
     external_imports: list[str] = field(default_factory=list)
-    docstring: Optional[str] = None
+    docstring: str | None = None
 
 
 @dataclass
@@ -140,9 +168,9 @@ class RelationInfo:
     source: str  # qualified name
     target: str
     relation_type: RelationType
-    label: Optional[str] = None
-    source_cardinality: Optional[str] = None
-    target_cardinality: Optional[str] = None
+    label: str | None = None
+    source_cardinality: str | None = None
+    target_cardinality: str | None = None
 
 
 @dataclass
@@ -156,6 +184,7 @@ class PackageInfo:
     relations: list[RelationInfo] = field(default_factory=list)
     dependencies: dict[str, set[str]] = field(default_factory=dict)  # module -> dependencies
     circular_dependencies: list[list[str]] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)  # fichiers ignorés (mode tolérant)
 
 
 def get_visibility(name: str) -> Visibility:
