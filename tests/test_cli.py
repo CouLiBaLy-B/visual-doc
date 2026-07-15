@@ -130,6 +130,49 @@ def test_cli_diagram_single_format(temp_package: Path, tmp_path: Path):
     assert not (out / "package.mmd").exists()
 
 
+def test_cli_build_without_mkdocs_mentions_site_extra(temp_package: Path, tmp_path: Path):
+    """Le message d'installation doit afficher l'extra [site] (non avalé par Rich)."""
+    from unittest.mock import patch
+
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        with patch("importlib.util.find_spec", return_value=None):
+            result = runner.invoke(cli, ["build", str(temp_package)])
+
+        assert result.exit_code == 0, result.output
+        assert "gendoc[site]" in result.output.replace("\n", "")
+
+
+def test_cli_serve_builds_docs_and_launches_mkdocs(temp_package: Path, tmp_path: Path):
+    """gendoc serve régénère les docs puis lance mkdocs serve."""
+    from unittest.mock import MagicMock, patch
+
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        cwd = Path.cwd()
+        with patch("subprocess.run", return_value=MagicMock(returncode=0)) as mock_run:
+            result = runner.invoke(cli, ["serve", str(temp_package), "--port", "8123"])
+
+        assert result.exit_code == 0, result.output
+        assert (cwd / "docs" / "index.md").exists()
+        cmd = [str(part) for part in mock_run.call_args[0][0]]
+        assert "mkdocs" in cmd
+        assert "serve" in cmd
+        assert "127.0.0.1:8123" in cmd
+
+
+def test_cli_serve_without_mkdocs_fails_with_hint(temp_package: Path, tmp_path: Path):
+    from unittest.mock import patch
+
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        with patch("importlib.util.find_spec", return_value=None):
+            result = runner.invoke(cli, ["serve", str(temp_package)])
+
+        assert result.exit_code == 1
+        assert "gendoc[site]" in result.output.replace("\n", "")
+
+
 def test_cli_build_focus_and_formats(temp_package: Path, tmp_path: Path):
     """--focus génère la page focus ; --formats mmd n'écrit aucun SVG."""
     runner = CliRunner()

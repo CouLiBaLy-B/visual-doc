@@ -18,6 +18,31 @@ from .config import load_config
 console = Console()
 
 
+def _mkdocs_env(package_info) -> dict[str, str]:
+    """Environnement pour mkdocs : PYTHONPATH permettant à mkdocstrings d'importer le package."""
+    import os
+
+    paths = [str(Path.cwd())]
+    try:
+        pkg_root = package_info.root_path.resolve()
+        paths.append(str(pkg_root.parent))
+        paths.append(str(pkg_root))
+        paths.append(str(pkg_root.parent.parent))
+    except Exception:
+        pass
+    src_path = Path.cwd() / "src"
+    if src_path.exists():
+        paths.append(str(src_path.resolve()))
+
+    env = os.environ.copy()
+    unique_paths = list(dict.fromkeys(paths))
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = os.pathsep.join(unique_paths) + (
+        os.pathsep + existing if existing else ""
+    )
+    return env
+
+
 @click.group()
 @click.version_option(package_name="gendoc", prog_name="gendoc")
 def cli() -> None:
@@ -200,7 +225,6 @@ def build(
             task = progress.add_task("Construction site MkDocs...", total=None)
             try:
                 import importlib.util
-                import os
                 import subprocess
 
                 if importlib.util.find_spec("mkdocs") is None:
@@ -217,43 +241,10 @@ def build(
                         output_site = (Path.cwd() / output_site).resolve()
                     output_site.mkdir(parents=True, exist_ok=True)
 
-                    # Préparer PYTHONPATH pour mkdocstrings
-                    env = os.environ.copy()
-                    # Ajouter cwd, parent du package, root_path, src
-                    paths_to_add = []
-                    cwd = Path.cwd()
-                    paths_to_add.append(str(cwd))
-                    # package root parent
-                    try:
-                        pkg_root = package_info.root_path.resolve()
-                        pkg_parent = pkg_root.parent.resolve()
-                        paths_to_add.append(str(pkg_parent))
-                        paths_to_add.append(str(pkg_root))
-                        # Si package est example/example_pkg, parent = example, déjà ajouté
-                        # Mais aussi parent du parent (project root)
-                        paths_to_add.append(str(pkg_parent.parent.resolve()))
-                    except Exception:
-                        pass
-                    src_path = cwd / "src"
-                    if src_path.exists():
-                        paths_to_add.append(str(src_path.resolve()))
-
-                    # Dédoublonner et construire PYTHONPATH
-                    seen = set()
-                    uniq_paths = []
-                    for p in paths_to_add:
-                        if p not in seen:
-                            seen.add(p)
-                            uniq_paths.append(p)
-                    # Ajouter au PYTHONPATH existant
-                    existing_pp = env.get("PYTHONPATH", "")
-                    new_pp = ":".join(uniq_paths)
-                    if existing_pp:
-                        new_pp = new_pp + ":" + existing_pp
-                    env["PYTHONPATH"] = new_pp
+                    env = _mkdocs_env(package_info)
 
                     if verbose:
-                        console.print(f"[dim]PYTHONPATH pour mkdocs: {new_pp}")
+                        console.print(f"[dim]PYTHONPATH pour mkdocs: {env['PYTHONPATH']}")
 
                     # lancer mkdocs build via l'interpréteur courant :
                     # fonctionne même si le bin/ du venv n'est pas sur le PATH
@@ -299,8 +290,9 @@ def build(
                         f"génération markdown seulement dans {docs_path}[/]"
                     )
             except FileNotFoundError:
+                # le crochet est échappé pour ne pas être interprété comme balise Rich
                 console.print(
-                    "[yellow]mkdocs non installé (pip install 'gendoc[site]'), "
+                    "[yellow]mkdocs non installé (pip install 'gendoc\\[site]'), "
                     "génération markdown seulement[/]"
                 )
             except Exception as e:
@@ -444,6 +436,71 @@ def check(package_path: Path | None, config: Path | None) -> None:
     except Exception as e:
         console.print(f"[red]✗ Code non analysable: {e}[/]")
         sys.exit(1)
+
+
+@cli.command()
+@click.argument(
+    "package_path", type=click.Path(exists=True, path_type=Path), required=False, default=None
+)
+@click.option(
+    "--config", "-c", type=click.Path(exists=True, path_type=Path), help="Chemin vers gendoc.toml"
+)
+@click.option("--port", type=int, default=8000, help="Port du serveur de prévisualisation")
+def serve(package_path: Path | None, config: Path | None, port: int) -> None:
+    """Régénère la documentation puis la sert avec MkDocs (rechargement auto)."""
+    import importlib.util
+    import subprocess
+
+    if importlib.util.find_spec("mkdocs") is None:
+        console.print(
+            "[red]mkdocs est requis pour servir le site : pip install 'gendoc\\[site]'[/]"
+        )
+        sys.exit(1)
+
+    cfg = load_config(config_path=config, package_path=package_path)
+    cfg.merge_cli(package_path=package_path)
+
+    if not cfg.package_path.exists():
+        console.print(f"[red]Erreur: chemin {cfg.package_path} introuvable[/]")
+        sys.exit(1)
+
+    console.print(f"[bold blue]gendoc[/] - Analyse de [cyan]{cfg.package_path}[/]")
+    try:
+        package_info = analyze_package(
+            root_path=cfg.package_path,
+            package_name=cfg.package_name,
+            exclude_patterns=cfg.exclude_patterns,
+            include_private=cfg.include_private,
+            include_tests=cfg.include_tests,
+        )
+        docs_path = SiteBuilder(cfg, package_info).build()
+    except Exception as e:
+        console.print(f"[red]Échec de la génération: {e}[/]")
+        sys.exit(2)
+
+    mkdocs_yml = docs_path.parent / "mkdocs.yml"
+    if not mkdocs_yml.exists():
+        console.print(f"[red]mkdocs.yml introuvable à côté de {docs_path}[/]")
+        sys.exit(1)
+
+    console.print(
+        f"[green]Docs régénérées dans {docs_path}[/] — "
+        f"serveur sur [bold]http://127.0.0.1:{port}[/] (Ctrl+C pour arrêter)"
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "mkdocs",
+            "serve",
+            "-f",
+            str(mkdocs_yml),
+            "-a",
+            f"127.0.0.1:{port}",
+        ],
+        env=_mkdocs_env(package_info),
+    )
+    sys.exit(result.returncode)
 
 
 @cli.command()

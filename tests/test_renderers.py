@@ -163,6 +163,41 @@ def test_svg_homonym_classes_have_distinct_positions():
     assert len(set(xs)) == 2  # deux boîtes à des positions distinctes
 
 
+def test_mermaid_empty_diagram_is_valid():
+    """Un module sans classe doit produire du Mermaid valide, pas un classDiagram vide."""
+    out = generate_class_diagram_mermaid({}, [], title="Module agent_recruiter.main")
+
+    # une instruction réelle en plus de l'en-tête et du commentaire de titre
+    body = [
+        line.strip()
+        for line in out.splitlines()
+        if line.strip() and not line.strip().startswith("%%") and line.strip() != "classDiagram"
+    ]
+    assert body, "un classDiagram vide (en-tête + commentaire seul) est rejeté par Mermaid"
+    assert any("note" in line for line in body)
+
+
+def test_module_mermaid_no_classes_is_valid(tmp_path):
+    """Le diagramme d'un module réel sans classe (que des fonctions) reste valide."""
+    from gendoc.analyzer import analyze_package
+
+    pkg_dir = tmp_path / "pkg"
+    pkg_dir.mkdir()
+    (pkg_dir / "__init__.py").write_text("")
+    (pkg_dir / "main.py").write_text("def run():\n    return 1\n")
+
+    pkg = analyze_package(pkg_dir, package_name="pkg")
+    mod = pkg.modules["pkg.main"]
+    out = generate_module_class_diagram_mermaid("pkg.main", mod.classes, pkg.relations)
+
+    body = [
+        line.strip()
+        for line in out.splitlines()
+        if line.strip() and not line.strip().startswith("%%") and line.strip() != "classDiagram"
+    ]
+    assert body
+
+
 def test_mermaid_no_bare_separator_line(sample_package):
     """Pas de ligne '--' (syntaxe PlantUML) dans les corps de classes Mermaid."""
     mermaid = generate_class_diagram_mermaid(sample_package.classes, sample_package.relations)

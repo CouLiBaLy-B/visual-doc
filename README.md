@@ -80,6 +80,9 @@ gendoc check ./pkg
 # Génère seulement diagrammes (sans site)
 gendoc diagram ./pkg --output ./diagrams --format all
 
+# Régénère les docs puis les sert avec rechargement auto (nécessite [site])
+gendoc serve ./pkg --port 8000
+
 # Init config exemple
 gendoc init
 ```
@@ -394,7 +397,8 @@ classDiagram
 
 - Rendu PNG via `mmdc` (Mermaid CLI) si Node dispo
 - Support `pyreverse` en option `--use-pyreverse` pour comparer
-- Mode watch `gendoc serve`
+- Rebuild automatique des diagrammes quand les sources changent (`gendoc serve` relance
+  aujourd'hui MkDocs en watch sur les markdown générés, pas sur le code source)
 
 ---
 

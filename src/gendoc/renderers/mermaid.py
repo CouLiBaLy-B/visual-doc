@@ -64,6 +64,12 @@ def generate_class_diagram_mermaid(
     sorted_classes = sorted(classes.values(), key=lambda c: c.qualified_name)
     node_ids = {c.qualified_name: sanitize_id(c.qualified_name) for c in sorted_classes}
 
+    # Un classDiagram réduit à l'en-tête + un commentaire est rejeté par Mermaid
+    # (« Syntax error in text ») : émettre une note pour garder un diagramme valide.
+    if not sorted_classes:
+        lines.append('    note "Aucune classe à afficher"')
+        return "\n".join(lines)
+
     for cls in sorted_classes:
         lines.append(
             _format_class_mermaid(cls, node_ids[cls.qualified_name], public_only=public_only)
