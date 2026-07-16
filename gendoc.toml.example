@@ -1,12 +1,12 @@
-# gendoc.toml - Configuration exemple pour gendoc
+# gendoc.toml - Configuration gendoc
 # Placez ce fichier à la racine de votre projet ou spécifiez --config
 
 [gendoc]
 # === Entrée ===
 # Chemin vers le package à documenter (dossier ou fichier)
-package_path = "./example/example_pkg"
+package_path = "."
 # Nom du package (auto-détecté si non précisé)
-package_name = "example_pkg"
+# package_name = "mon_package"
 
 # === Sortie ===
 # Dossier où MkDocs va générer le site HTML final
@@ -30,13 +30,13 @@ public_only = false
 # === Diagrammes ciblés ===
 # Générer un diagramme centré sur une classe et N niveaux de collaborateurs
 # Utile pour éviter diagrammes géants illisibles
-# focus_class = "Order"
+# focus_class = "MaClasse"
 # focus_depth = 2
 
 # === Site ===
-site_name = "Ma Documentation"
+site_name = "Documentation"
 theme = "material"
 # Plugin de recherche MkDocs
 enable_search = true
 # URL repo pour MkDocs Material
-repo_url = "https://github.com/username/repo"
+# repo_url = "https://github.com/username/repo"

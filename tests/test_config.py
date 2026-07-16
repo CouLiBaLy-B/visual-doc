@@ -175,3 +175,27 @@ def test_config_removed_dead_keys():
 
     for dead in ("max_workers", "edit_uri", "enable_mermaid", "inheritance_depth"):
         assert not hasattr(cfg, dead), dead
+
+
+def test_toml_example_in_sync_with_dataclass():
+    """gendoc.toml.example est généré depuis GendocConfig (source unique du schéma)."""
+    example = Path(__file__).resolve().parent.parent / "gendoc.toml.example"
+
+    assert example.read_text(encoding="utf-8") == GendocConfig().to_toml_template()
+
+
+def test_toml_template_roundtrips_to_defaults(tmp_path: Path):
+    """Le template init, chargé tel quel, redonne exactement les défauts."""
+    toml_path = tmp_path / "gendoc.toml"
+    toml_path.write_text(GendocConfig().to_toml_template(), encoding="utf-8")
+
+    cfg = GendocConfig.from_toml(toml_path)
+    defaults = GendocConfig()
+
+    assert cfg.formats == defaults.formats
+    assert cfg.exclude_patterns == defaults.exclude_patterns
+    assert cfg.package_name == defaults.package_name
+    assert cfg.site_name == defaults.site_name
+    assert cfg.include_private == defaults.include_private
+    assert cfg.focus_class is None
+    assert cfg.repo_url is None

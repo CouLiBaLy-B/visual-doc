@@ -538,35 +538,10 @@ def serve(package_path: Path | None, config: Path | None, port: int) -> None:
 @cli.command()
 def init() -> None:
     """Initialise un fichier gendoc.toml exemple."""
+    from .config import GendocConfig
 
-    example_content = """# gendoc.toml - Configuration exemple
-
-[gendoc]
-# Chemin vers le package à documenter
-package_path = "."
-package_name = "mon_package"
-
-# Sortie
-output_dir = "site"
-docs_dir = "docs"
-formats = ["mmd", "puml", "svg", "png"]
-
-# Filtrage
-exclude_patterns = ["test_*", "*_test.py", "tests", "__pycache__", "build"]
-include_private = false
-include_tests = false
-public_only = false
-
-# Diagramme ciblé (optionnel)
-# focus_class = "MaClasse"
-# focus_depth = 2
-
-# Site
-site_name = "Ma Documentation"
-theme = "material"
-enable_search = true
-repo_url = "https://github.com/username/repo"
-"""
+    # source unique du schéma : le template est généré depuis la dataclass
+    example_content = GendocConfig().to_toml_template()
 
     target = Path("gendoc.toml")
     if target.exists():

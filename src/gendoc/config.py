@@ -23,7 +23,15 @@ class GendocConfig:
 
     # Filtrage
     exclude_patterns: list[str] = field(
-        default_factory=lambda: ["test_*", "*_test.py", "tests", "__pycache__"]
+        default_factory=lambda: [
+            "test_*",
+            "*_test.py",
+            "tests",
+            "__pycache__",
+            "build",
+            "dist",
+            ".venv",
+        ]
     )
     include_private: bool = False
     include_tests: bool = False
@@ -163,6 +171,86 @@ class GendocConfig:
         if site_name:
             self.site_name = site_name
         return self
+
+    def to_toml_template(self) -> str:
+        """Rend le TOML commenté correspondant à cette configuration.
+
+        Source unique du schéma de configuration : le template de `gendoc init`
+        et `gendoc.toml.example` sont générés depuis cette méthode (un test de
+        synchronisation le garantit). Les champs optionnels absents (None)
+        sont émis en commentaire.
+        """
+
+        def toml_list(values: list[str]) -> str:
+            return "[" + ", ".join(f'"{v}"' for v in values) + "]"
+
+        def toml_bool(value: bool) -> str:
+            return "true" if value else "false"
+
+        package_name_line = (
+            f'package_name = "{self.package_name}"'
+            if self.package_name
+            else '# package_name = "mon_package"'
+        )
+        focus_class_line = (
+            f'focus_class = "{self.focus_class}"'
+            if self.focus_class
+            else '# focus_class = "MaClasse"'
+        )
+        focus_depth_line = (
+            f"focus_depth = {self.focus_depth}"
+            if self.focus_class
+            else f"# focus_depth = {self.focus_depth}"
+        )
+        repo_url_line = (
+            f'repo_url = "{self.repo_url}"'
+            if self.repo_url
+            else '# repo_url = "https://github.com/username/repo"'
+        )
+
+        return f"""# gendoc.toml - Configuration gendoc
+# Placez ce fichier à la racine de votre projet ou spécifiez --config
+
+[gendoc]
+# === Entrée ===
+# Chemin vers le package à documenter (dossier ou fichier)
+package_path = "{self.package_path.as_posix()}"
+# Nom du package (auto-détecté si non précisé)
+{package_name_line}
+
+# === Sortie ===
+# Dossier où MkDocs va générer le site HTML final
+output_dir = "{self.output_dir.as_posix()}"
+# Dossier sources markdown (sera créé)
+docs_dir = "{self.docs_dir.as_posix()}"
+# Formats de sortie: mmd (Mermaid), puml (PlantUML), svg, png
+formats = {toml_list(self.formats)}
+
+# === Filtrage ===
+# Patterns à exclure : comparés aux segments du chemin (fnmatch),
+# ex: "tests" exclut le dossier tests/ mais pas attestation.py
+exclude_patterns = {toml_list(self.exclude_patterns)}
+# Inclure classes/fonctions préfixées par _ ?
+include_private = {toml_bool(self.include_private)}
+# Inclure dossiers/fichiers de tests ?
+include_tests = {toml_bool(self.include_tests)}
+# Ne montrer que les membres publics dans les diagrammes
+public_only = {toml_bool(self.public_only)}
+
+# === Diagrammes ciblés ===
+# Générer un diagramme centré sur une classe et N niveaux de collaborateurs
+# Utile pour éviter diagrammes géants illisibles
+{focus_class_line}
+{focus_depth_line}
+
+# === Site ===
+site_name = "{self.site_name}"
+theme = "{self.theme}"
+# Plugin de recherche MkDocs
+enable_search = {toml_bool(self.enable_search)}
+# URL repo pour MkDocs Material
+{repo_url_line}
+"""
 
     @classmethod
     def find_config_file(cls, start_path: Path) -> Path | None:
