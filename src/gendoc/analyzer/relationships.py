@@ -142,8 +142,15 @@ def _resolve_simple(
     simple: str,
     name_map: dict[str, list[str]],
     current_module: str | None,
+    ambiguities: set[str] | None = None,
+    source: str | None = None,
 ) -> str | None:
-    """Résout un nom simple vers un nom qualifié : module courant d'abord, puis ordre trié."""
+    """Résout un nom simple vers un nom qualifié : module courant d'abord, puis ordre trié.
+
+    Quand plusieurs candidats subsistent hors du module courant, le premier
+    (ordre alphabétique, déterministe) est retenu et l'ambiguïté est signalée
+    dans ``ambiguities``.
+    """
     candidates = sorted(name_map.get(simple, ()))
     if not candidates:
         return None
@@ -154,6 +161,11 @@ def _resolve_simple(
         prefixed = [c for c in candidates if c.startswith(current_module + ".")]
         if prefixed:
             return prefixed[0]
+    if len(candidates) > 1 and ambiguities is not None:
+        ambiguities.add(
+            f"Type ambigu '{simple}' référencé par {source or '?'} : "
+            f"candidats {', '.join(candidates)}, retenu {candidates[0]}"
+        )
     return candidates[0]
 
 
@@ -162,6 +174,8 @@ def _resolve_class_name(
     name_map: dict[str, list[str]],
     qualified_set: set[str],
     current_module: str | None = None,
+    ambiguities: set[str] | None = None,
+    source: str | None = None,
 ) -> str | None:
     """Résout un nom de classe (simple, qualifié ou générique) vers un nom qualifié."""
     clean = name.split("[")[0]
@@ -171,12 +185,20 @@ def _resolve_class_name(
         suffix_matches = sorted(q for q in qualified_set if q.endswith(f".{clean}"))
         if suffix_matches:
             return suffix_matches[0]
-    return _resolve_simple(clean.split(".")[-1], name_map, current_module)
+    return _resolve_simple(clean.split(".")[-1], name_map, current_module, ambiguities, source)
 
 
-def detect_relationships(classes: list[ClassInfo]) -> list[RelationInfo]:
-    """Détecte les relations : héritage, composition, agrégation, association, dépendance."""
+def detect_relationships(
+    classes: list[ClassInfo],
+    warnings: list[str] | None = None,
+) -> list[RelationInfo]:
+    """Détecte les relations : héritage, composition, agrégation, association, dépendance.
+
+    Si ``warnings`` est fourni, les résolutions d'homonymes ambiguës y sont
+    ajoutées (triées, dédupliquées) sans changer la résolution elle-même.
+    """
     relations: list[RelationInfo] = []
+    ambiguities: set[str] = set()
 
     name_to_qualified: dict[str, list[str]] = defaultdict(list)
     for cls in classes:
@@ -187,7 +209,9 @@ def detect_relationships(classes: list[ClassInfo]) -> list[RelationInfo]:
     for cls in sorted(classes, key=lambda c: c.qualified_name):
         # Héritage
         for base in cls.bases:
-            target = _resolve_class_name(base, name_to_qualified, qualified_set, cls.module)
+            target = _resolve_class_name(
+                base, name_to_qualified, qualified_set, cls.module, ambiguities, cls.qualified_name
+            )
             if target and target != cls.qualified_name:
                 relations.append(
                     RelationInfo(
@@ -205,7 +229,9 @@ def detect_relationships(classes: list[ClassInfo]) -> list[RelationInfo]:
             for type_name, in_collection in type_flags.items():
                 if type_name in _IGNORED_TYPE_NAMES:
                     continue
-                target = _resolve_simple(type_name, name_to_qualified, cls.module)
+                target = _resolve_simple(
+                    type_name, name_to_qualified, cls.module, ambiguities, cls.qualified_name
+                )
                 if not target or target == cls.qualified_name:
                     continue
                 rel_type = _classify_attribute_relation(attr.default, type_name, in_collection)
@@ -235,7 +261,13 @@ def detect_relationships(classes: list[ClassInfo]) -> list[RelationInfo]:
             for type_name in _extract_types_from_annotation(annotation):
                 if type_name == current.name.split(".")[-1]:
                     continue
-                target = _resolve_simple(type_name, name_to_qualified, current.module)
+                target = _resolve_simple(
+                    type_name,
+                    name_to_qualified,
+                    current.module,
+                    ambiguities,
+                    current.qualified_name,
+                )
                 if not target or target == current.qualified_name:
                     continue
                 if (current.qualified_name, target) in existing:
@@ -255,6 +287,9 @@ def detect_relationships(classes: list[ClassInfo]) -> list[RelationInfo]:
                     add_dependency(param_type, f"{method.name} param", cls, attr_related)
             if method.return_type:
                 add_dependency(method.return_type, f"{method.name} return", cls, attr_related)
+
+    if warnings is not None:
+        warnings.extend(sorted(ambiguities))
 
     # Dédupliquer (source, target, type)
     seen: set[tuple[str, str, RelationType]] = set()

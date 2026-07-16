@@ -289,3 +289,37 @@ def test_field_default_without_factory_is_association():
 
     rel = next(r for r in rels if r.source == "m.Holder")
     assert rel.relation_type == RelationType.ASSOCIATION
+
+
+def test_homonym_fallback_is_reported():
+    """La résolution alphabétique d'un homonyme hors module courant est signalée."""
+    a_user = _cls("User", "pkg.a")
+    b_user = _cls("User", "pkg.b")
+    admin = _cls("Admin", "pkg.c", bases=["User"])
+
+    warnings: list[str] = []
+    rels = detect_relationships([a_user, b_user, admin], warnings=warnings)
+
+    # résolution inchangée (déterministe, 1er candidat alphabétique)
+    assert any(
+        r.source == "pkg.c.Admin"
+        and r.target == "pkg.a.User"
+        and r.relation_type == RelationType.INHERITANCE
+        for r in rels
+    )
+    assert len(warnings) == 1
+    assert "User" in warnings[0]
+    assert "pkg.a.User" in warnings[0] and "pkg.b.User" in warnings[0]
+    assert "pkg.c.Admin" in warnings[0]
+
+
+def test_no_warning_when_local_module_resolves_homonym():
+    """Pas de signalement quand le module courant lève l'ambiguïté."""
+    a_user = _cls("User", "pkg.a")
+    b_user = _cls("User", "pkg.b")
+    admin = _cls("Admin", "pkg.b", bases=["User"])
+
+    warnings: list[str] = []
+    detect_relationships([a_user, b_user, admin], warnings=warnings)
+
+    assert warnings == []

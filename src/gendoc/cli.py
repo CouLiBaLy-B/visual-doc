@@ -179,6 +179,11 @@ def build(
         for err in package_info.errors:
             console.print(f"  [yellow]- {err}[/]")
 
+    if verbose and package_info.warnings:
+        console.print(f"[yellow]⚠ {len(package_info.warnings)} avertissement(s) d'analyse:[/]")
+        for warning in package_info.warnings:
+            console.print(f"  [yellow]- {warning}[/]")
+
     # Résumé
     table = Table(title="Résumé analyse")
     table.add_column("Métrique", style="cyan")
@@ -446,6 +451,10 @@ def check(package_path: Path | None, config: Path | None) -> None:
             f"[green]✓ Code analysable: {len(package_info.modules)} modules, "
             f"{len(package_info.classes)} classes[/]"
         )
+        if package_info.warnings:
+            console.print(f"[yellow]⚠ {len(package_info.warnings)} avertissement(s) d'analyse:[/]")
+            for warning in package_info.warnings:
+                console.print(f"  [yellow]- {warning}[/]")
         if package_info.circular_dependencies:
             console.print(
                 f"[yellow]⚠ {len(package_info.circular_dependencies)} "

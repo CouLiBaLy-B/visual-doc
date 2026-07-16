@@ -166,7 +166,9 @@ def analyze_package(
 
     package_info.dependencies = dependencies
     package_info.circular_dependencies = detect_circular_dependencies(dependencies)
-    package_info.relations = detect_relationships(list(package_info.classes.values()))
+    package_info.relations = detect_relationships(
+        list(package_info.classes.values()), warnings=package_info.warnings
+    )
 
     return package_info
 

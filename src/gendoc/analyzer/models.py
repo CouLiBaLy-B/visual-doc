@@ -104,6 +104,7 @@ class PackageInfo:
     dependencies: dict[str, set[str]] = field(default_factory=dict)  # module -> dependencies
     circular_dependencies: list[list[str]] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)  # fichiers ignorés (mode tolérant)
+    warnings: list[str] = field(default_factory=list)  # avertissements non bloquants
 
 
 def get_visibility(name: str) -> Visibility:
