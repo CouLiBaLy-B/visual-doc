@@ -301,3 +301,44 @@ def test_builder_public_only(temp_package, tmp_path: Path, monkeypatch):
     docs_path = builder.build()
 
     assert (docs_path / "index.md").exists()
+
+
+def test_removed_module_leaves_no_orphans(temp_package, tmp_path: Path, monkeypatch):
+    """Un module supprimé de la source ne laisse ni page ni diagramme au run suivant."""
+    monkeypatch.chdir(tmp_path)
+    cfg = GendocConfig()
+    cfg.package_path = temp_package
+    cfg.docs_dir = tmp_path / "docs"
+    cfg.output_dir = tmp_path / "site"
+
+    pkg = analyze_package(temp_package, package_name="testpkg")
+    docs = SiteBuilder(cfg, pkg).build()
+    assert (docs / "modules" / "testpkg_services.md").exists()
+    assert (docs / "diagrams" / "testpkg_services.mmd").exists()
+
+    (temp_package / "services.py").unlink()
+    pkg2 = analyze_package(temp_package, package_name="testpkg")
+    docs2 = SiteBuilder(cfg, pkg2).build()
+
+    assert not (docs2 / "modules" / "testpkg_services.md").exists()
+    assert not (docs2 / "api" / "testpkg_services.md").exists()
+    assert not list((docs2 / "diagrams").glob("testpkg_services.*"))
+    assert "testpkg_services" not in (docs2 / "diagrams.md").read_text()
+
+
+def test_rebuild_produces_identical_file_tree(temp_package, tmp_path: Path, monkeypatch):
+    """Deux builds successifs produisent exactement le même ensemble de fichiers."""
+    monkeypatch.chdir(tmp_path)
+    cfg = GendocConfig()
+    cfg.package_path = temp_package
+    cfg.docs_dir = tmp_path / "docs"
+    cfg.output_dir = tmp_path / "site"
+    pkg = analyze_package(temp_package, package_name="testpkg")
+
+    docs = SiteBuilder(cfg, pkg).build()
+    first = sorted(p.relative_to(docs) for p in docs.rglob("*") if p.is_file())
+
+    docs = SiteBuilder(cfg, pkg).build()
+    second = sorted(p.relative_to(docs) for p in docs.rglob("*") if p.is_file())
+
+    assert first == second

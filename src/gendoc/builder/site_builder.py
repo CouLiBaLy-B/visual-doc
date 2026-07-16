@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import time
 import warnings
 from pathlib import Path
@@ -249,6 +250,11 @@ class SiteBuilder:
         # Si docs_src est dans un sous-dossier qui n'existe pas, créer
         docs_src.mkdir(parents=True, exist_ok=True)
 
+        # Purger les artefacts du run précédent : un module supprimé de la
+        # source ne doit pas laisser de pages/diagrammes orphelins (re-listés
+        # ensuite par diagrams.md qui inventorie le disque).
+        self._purge_generated(docs_src)
+
         # Créer sous-dossiers
         (docs_src / "diagrams").mkdir(exist_ok=True)
         (docs_src / "modules").mkdir(exist_ok=True)
@@ -280,6 +286,18 @@ class SiteBuilder:
         self._generate_mkdocs_yml(docs_src)
 
         return docs_src
+
+    # Tout ce que build() écrit sous docs_dir (docs_dir est un artefact gendoc :
+    # seuls ces chemins sont purgés, jamais d'autres fichiers utilisateur).
+    _GENERATED_SUBDIRS = ("diagrams", "modules", "api")
+    _GENERATED_PAGES = ("index.md", "packages.md", "focus.md", "diagrams.md")
+
+    def _purge_generated(self, docs_src: Path) -> None:
+        """Supprime les sous-dossiers et pages générés par un run précédent."""
+        for sub in self._GENERATED_SUBDIRS:
+            shutil.rmtree(docs_src / sub, ignore_errors=True)
+        for page in self._GENERATED_PAGES:
+            (docs_src / page).unlink(missing_ok=True)
 
     def _generate_package_diagrams(self, docs_src: Path) -> None:
         """Génère diagrammes package."""
