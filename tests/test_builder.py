@@ -150,6 +150,48 @@ def test_generated_mkdocs_has_marker_and_is_regenerated(temp_package, tmp_path: 
     assert "NouveauNom" in mk.read_text()
 
 
+def test_pages_show_rendered_diagrams_not_raw_plantuml(temp_package, tmp_path: Path, monkeypatch):
+    """Les pages montrent le diagramme Mermaid rendu, pas de bloc PlantUML brut (code)."""
+    monkeypatch.chdir(tmp_path)
+    pkg = analyze_package(temp_package, package_name="testpkg")
+
+    cfg = GendocConfig()
+    cfg.package_path = temp_package
+    cfg.docs_dir = tmp_path / "docs"
+    cfg.output_dir = tmp_path / "site"
+    docs = SiteBuilder(cfg, pkg).build()
+
+    module_page = (docs / "modules" / "testpkg_models.md").read_text()
+    assert "```mermaid" in module_page  # diagramme UML rendu conservé
+    assert "@startuml" not in module_page  # plus de PlantUML brut affiché comme code
+    assert "```plantuml" not in module_page
+
+    packages_page = (docs / "packages.md").read_text()
+    assert "```mermaid" in packages_page
+    assert "@startuml" not in packages_page
+
+    # les .puml restent générés et listés (téléchargeables) sur la page diagrammes
+    assert (docs / "diagrams" / "testpkg_models.puml").exists()
+    assert "testpkg_models.puml" in (docs / "diagrams.md").read_text()
+
+
+def test_api_pages_hide_raw_source(temp_package, tmp_path: Path, monkeypatch):
+    """La doc API ne montre pas le source Python brut (show_source désactivé)."""
+    monkeypatch.chdir(tmp_path)
+    pkg = analyze_package(temp_package, package_name="testpkg")
+
+    cfg = GendocConfig()
+    cfg.package_path = temp_package
+    cfg.docs_dir = tmp_path / "docs"
+    cfg.output_dir = tmp_path / "site"
+    docs = SiteBuilder(cfg, pkg).build()
+
+    api_page = (docs / "api" / "testpkg_models.md").read_text()
+    assert "show_source: false" in api_page
+    mkdocs = (docs.parent / "mkdocs.yml").read_text()
+    assert "show_source: true" not in mkdocs
+
+
 def test_module_pages_use_relative_paths(temp_package, tmp_path: Path):
     """Les pages ne doivent pas embarquer de chemins absolus de la machine."""
     pkg = analyze_package(temp_package, package_name="testpkg")

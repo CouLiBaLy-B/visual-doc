@@ -65,7 +65,7 @@ plugins:
           paths: {{ python_paths }}
           options:
             docstring_style: google
-            show_source: true
+            show_source: false
             show_root_heading: true
             show_root_full_path: false
             show_object_full_path: false
@@ -146,11 +146,7 @@ PACKAGES_MD_TEMPLATE = """# Packages - {{ package_name }}
 {{ package_mermaid }}
 ```
 
-## Diagramme de dépendances (PlantUML)
-
-```plantuml
-{{ package_plantuml }}
-```
+Source PlantUML : [package.puml](diagrams/package.puml)
 
 ## SVG
 
@@ -184,11 +180,7 @@ MODULE_MD_TEMPLATE = """# Module `{{ module.dotted_path }}`
 {% if svg_enabled %}
 ![Diagramme de classes de {{ module.dotted_path }}](../diagrams/{{ safe_name }}.svg)
 {% endif %}
-### PlantUML
-
-```plantuml
-{{ plantuml_diagram }}
-```
+Source PlantUML : [{{ safe_name }}.puml](../diagrams/{{ safe_name }}.puml)
 
 ## Détails API
 
@@ -209,7 +201,7 @@ API_MODULE_TEMPLATE = """# API - {{ module.dotted_path }}
 
 ::: {{ module.dotted_path }}.{{ cls.name }}
     options:
-        show_source: true
+        show_source: false
         heading_level: 3
 
 {% endfor %}
@@ -225,9 +217,7 @@ Diagramme centré sur **{{ focus_class }}** et ses {{ depth }} niveaux de collab
 {% if svg_enabled %}
 ![Focus SVG](diagrams/focus_{{ focus_class }}.svg)
 {% endif %}
-```plantuml
-{{ plantuml }}
-```
+Source PlantUML : [focus_{{ focus_class }}.puml](diagrams/focus_{{ focus_class }}.puml)
 
 ## Classes incluses
 
@@ -388,7 +378,6 @@ class SiteBuilder:
             content = tmpl.render(
                 module=module_dict,
                 mermaid_diagram=mermaid,
-                plantuml_diagram=plantuml,
                 api_file=api_file,
                 safe_name=safe_name,
                 svg_enabled="svg" in self.config.formats,
@@ -437,14 +426,12 @@ class SiteBuilder:
     def _generate_packages_page(self, docs_src: Path) -> None:
         summary = generate_package_summary_markdown(self.package_info)
         mermaid = generate_package_diagram_mermaid(self.package_info)
-        plantuml = generate_package_diagram_plantuml(self.package_info)
 
         tmpl = Template(PACKAGES_MD_TEMPLATE)
         content = tmpl.render(
             package_name=self.package_info.name,
             summary=summary,
             package_mermaid=mermaid,
-            package_plantuml=plantuml,
         )
         (docs_src / "packages.md").write_text(content, encoding="utf-8")
 
@@ -492,7 +479,6 @@ class SiteBuilder:
             focus_class=focus,
             depth=depth,
             mermaid=mermaid,
-            plantuml=plantuml,
             classes=focused_classes.values(),
             svg_enabled="svg" in self.config.formats,
         )
