@@ -40,7 +40,7 @@ gendoc build ./mon_package
 
 # Le site est généré dans ./site et sources markdown dans ./docs
 # Pour servir en local :
-mkdocs serve
+gendoc serve
 # → http://127.0.0.1:8000
 ```
 
@@ -54,7 +54,7 @@ C'est le critère d'acceptation : `gendoc build ./mon_package` produit un site n
 
 ```bash
 gendoc build ./example/example_pkg --output ./site --site-name "Demo gendoc"
-mkdocs serve
+gendoc serve
 ```
 
 ### Options CLI
@@ -262,10 +262,10 @@ gendoc.build_docs_with_config(cfg)
 print(gendoc.quick_overview("./example/example_pkg"))
 ```
 
-Exemple complet : `examples/library_usage.py`
+Exemple complet : `example/library_usage.py`
 
 ```bash
-python examples/library_usage.py
+python example/library_usage.py
 ```
 
 Intégration dans votre propre outil :

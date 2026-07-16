@@ -148,7 +148,8 @@ class GendocConfig:
         if output_dir:
             self.output_dir = output_dir
         if exclude:
-            self.exclude_patterns = list(set(self.exclude_patterns + exclude))
+            # dict.fromkeys : dédoublonnage déterministe, ordre d'apparition conservé
+            self.exclude_patterns = list(dict.fromkeys(self.exclude_patterns + exclude))
         if include_private is not None:
             self.include_private = include_private
         if public_only is not None:

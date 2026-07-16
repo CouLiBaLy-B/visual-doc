@@ -44,10 +44,6 @@ class AttributeInfo:
     default: str | None = None
     visibility: Visibility = Visibility.PUBLIC
     is_class_attribute: bool = False
-    docstring: str | None = None
-
-    def is_private(self) -> bool:
-        return self.visibility in (Visibility.PRIVATE, Visibility.DUNDER)
 
     def mermaid_str(self) -> str:
         type_part = f" {_mermaid_safe_type(self.type_annotation)}" if self.type_annotation else ""
@@ -81,9 +77,6 @@ class MethodInfo:
     is_async: bool = False
     defaults: dict[str, str] = field(default_factory=dict)  # param -> valeur par défaut
     docstring: str | None = None
-
-    def is_private(self) -> bool:
-        return self.visibility in (Visibility.PRIVATE, Visibility.DUNDER)
 
     def _display_name(self) -> str:
         return f"async {self.name}" if self.is_async else self.name
@@ -139,12 +132,6 @@ class ClassInfo:
     def qualified_name(self) -> str:
         return f"{self.module}.{self.name}"
 
-    def public_attributes(self) -> list[AttributeInfo]:
-        return [a for a in self.attributes if a.visibility == Visibility.PUBLIC]
-
-    def public_methods(self) -> list[MethodInfo]:
-        return [m for m in self.methods if m.visibility == Visibility.PUBLIC]
-
 
 @dataclass
 class ModuleInfo:
@@ -169,8 +156,6 @@ class RelationInfo:
     target: str
     relation_type: RelationType
     label: str | None = None
-    source_cardinality: str | None = None
-    target_cardinality: str | None = None
 
 
 @dataclass

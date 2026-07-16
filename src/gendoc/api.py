@@ -221,7 +221,7 @@ def check_package(package_path: str | Path) -> bool:
     """Vérifie si package analysable (pour CI ou lib).
 
     Returns:
-        True si analysable, False sinon (ou lève exception si verbose).
+        True si analysable, False sinon.
 
     Example:
         >>> import gendoc

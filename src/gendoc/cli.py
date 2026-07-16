@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
+from . import __version__
 from .analyzer import analyze_package
 from .builder import SiteBuilder
 from .config import load_config
@@ -44,7 +45,7 @@ def _mkdocs_env(package_info) -> dict[str, str]:
 
 
 @click.group()
-@click.version_option(package_name="gendoc", prog_name="gendoc")
+@click.version_option(version=__version__, prog_name="gendoc")
 def cli() -> None:
     """gendoc - Pipeline de documentation graphique automatique."""
     pass
@@ -164,7 +165,6 @@ def build(
                     f"{len(package_info.classes)} classes"
                 ),
             )
-            time.sleep(0.3)
         except RuntimeError as e:
             console.print(f"[red]Échec analyse: {e}[/]")
             sys.exit(2)
@@ -319,7 +319,7 @@ def build(
     console.print(
         f"\n[bold]Site disponible:[/] {site_dir / 'index.html'} (si build) ou [cyan]{docs_path}[/]"
     )
-    console.print("[bold]Commande pour servir:[/] mkdocs serve")
+    console.print("[bold]Commande pour servir:[/] gendoc serve")
 
 
 @cli.command()
@@ -329,10 +329,17 @@ def build(
 @click.option("--config", "-c", type=click.Path(exists=True, path_type=Path))
 @click.option("--output", "-o", type=click.Path(path_type=Path), default=Path("diagrams"))
 @click.option(
-    "--format", "fmt", type=click.Choice(["mermaid", "plantuml", "svg", "all"]), default="all"
+    "--format",
+    "fmt",
+    type=click.Choice(["mmd", "puml", "svg", "all", "mermaid", "plantuml"]),
+    default="all",
+    help="Format des diagrammes (mermaid/plantuml sont des alias de mmd/puml)",
 )
 def diagram(package_path: Path | None, config: Path | None, output: Path, fmt: str) -> None:
     """Génère uniquement les diagrammes (sans site)."""
+
+    # vocabulaire aligné sur la config (formats = ["mmd", "puml", ...])
+    fmt = {"mermaid": "mmd", "plantuml": "puml"}.get(fmt, fmt)
 
     cfg = load_config(config_path=config, package_path=package_path)
     cfg.merge_cli(package_path=package_path)
@@ -343,13 +350,25 @@ def diagram(package_path: Path | None, config: Path | None, output: Path, fmt: s
 
     console.print(f"Génération diagrammes pour {cfg.package_path} -> {output}")
 
-    package_info = analyze_package(
-        root_path=cfg.package_path,
-        package_name=cfg.package_name,
-        exclude_patterns=cfg.exclude_patterns,
-        include_private=cfg.include_private,
-        include_tests=cfg.include_tests,
-    )
+    try:
+        package_info = analyze_package(
+            root_path=cfg.package_path,
+            package_name=cfg.package_name,
+            exclude_patterns=cfg.exclude_patterns,
+            include_private=cfg.include_private,
+            include_tests=cfg.include_tests,
+        )
+    except RuntimeError as e:
+        console.print(f"[red]Échec analyse: {e}[/]")
+        sys.exit(2)
+    except Exception as e:
+        console.print(f"[red]Erreur inattendue lors de l'analyse: {e}[/]")
+        sys.exit(2)
+
+    if package_info.errors:
+        console.print(f"[yellow]⚠ {len(package_info.errors)} fichier(s) non parsables ignorés:[/]")
+        for err in package_info.errors:
+            console.print(f"  [yellow]- {err}[/]")
 
     output.mkdir(parents=True, exist_ok=True)
 
@@ -364,11 +383,11 @@ def diagram(package_path: Path | None, config: Path | None, output: Path, fmt: s
     )
 
     # Package
-    if fmt in ("mermaid", "all"):
+    if fmt in ("mmd", "all"):
         (output / "package.mmd").write_text(
             generate_package_diagram_mermaid(package_info), encoding="utf-8"
         )
-    if fmt in ("plantuml", "all"):
+    if fmt in ("puml", "all"):
         (output / "package.puml").write_text(
             generate_package_diagram_plantuml(package_info), encoding="utf-8"
         )
@@ -376,12 +395,12 @@ def diagram(package_path: Path | None, config: Path | None, output: Path, fmt: s
         save_svg(generate_package_diagram_svg(package_info), output / "package.svg")
 
     # Global class
-    if fmt in ("mermaid", "all"):
+    if fmt in ("mmd", "all"):
         (output / "classes.mmd").write_text(
             generate_class_diagram_mermaid(package_info.classes, package_info.relations),
             encoding="utf-8",
         )
-    if fmt in ("plantuml", "all"):
+    if fmt in ("puml", "all"):
         (output / "classes.puml").write_text(
             generate_class_diagram_plantuml(package_info.classes, package_info.relations),
             encoding="utf-8",
@@ -447,7 +466,11 @@ def check(package_path: Path | None, config: Path | None) -> None:
 )
 @click.option("--port", type=int, default=8000, help="Port du serveur de prévisualisation")
 def serve(package_path: Path | None, config: Path | None, port: int) -> None:
-    """Régénère la documentation puis la sert avec MkDocs (rechargement auto)."""
+    """Régénère la documentation puis la sert avec MkDocs.
+
+    Le rechargement automatique de MkDocs ne surveille que les pages générées,
+    pas le code source : relancer la commande après modification du code.
+    """
     import importlib.util
     import subprocess
 
