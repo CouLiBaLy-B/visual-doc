@@ -150,3 +150,142 @@ def test_relations_are_deterministic_across_input_order():
     assert keyset(detect_relationships(list(reversed(classes)))) == ref
     # sans module local, la cible homonyme est choisie par ordre lexicographique
     assert ("pkg.c.Admin", "pkg.a.User", RelationType.INHERITANCE) in ref
+
+
+def test_dataclass_default_factory_object_is_composition():
+    """field(default_factory=Engine) : l'instance est construite par la classe."""
+    engine = _cls("Engine", "m")
+    owner = _cls(
+        "Owner",
+        "m",
+        attributes=[
+            AttributeInfo(
+                name="engine",
+                type_annotation="Engine",
+                default="field(default_factory=Engine)",
+            )
+        ],
+    )
+
+    rels = detect_relationships([engine, owner])
+
+    rel = next(r for r in rels if r.source == "m.Owner")
+    assert rel.relation_type == RelationType.COMPOSITION
+
+
+def test_dataclass_default_factory_list_is_composition():
+    """field(default_factory=list) sur List[Item] : le conteneur appartient à la classe."""
+    item = _cls("Item", "m")
+    order = _cls(
+        "Order",
+        "m",
+        attributes=[
+            AttributeInfo(
+                name="items",
+                type_annotation="List[Item]",
+                default="field(default_factory=list)",
+            )
+        ],
+    )
+
+    rels = detect_relationships([item, order])
+
+    rel = next(r for r in rels if r.target == "m.Item")
+    assert rel.relation_type == RelationType.COMPOSITION
+
+
+def test_collection_without_construction_stays_aggregation():
+    """Collection typée reçue (non construite par la classe) : AGGREGATION."""
+    item = _cls("Item", "m")
+    for default in (None, "items"):
+        c = _cls(
+            "C",
+            "m",
+            attributes=[
+                AttributeInfo(name="items", type_annotation="list[Item]", default=default)
+            ],
+        )
+        rels = detect_relationships([item, c])
+        rel = next(r for r in rels if r.target == "m.Item")
+        assert rel.relation_type == RelationType.AGGREGATION, default
+
+
+def test_qualified_constructor_is_composition():
+    """self.engine = core.Engine() : construction qualifiée reconnue."""
+    engine = _cls("Engine", "m.core")
+    owner = _cls(
+        "Owner",
+        "m.app",
+        attributes=[
+            AttributeInfo(name="engine", type_annotation="Engine", default="core.Engine()")
+        ],
+    )
+
+    rels = detect_relationships([engine, owner])
+
+    rel = next(r for r in rels if r.source == "m.app.Owner")
+    assert rel.relation_type == RelationType.COMPOSITION
+
+
+def test_optional_union_constructed_is_composition():
+    """Engine | None construit → COMPOSITION ; initialisé à None → ASSOCIATION."""
+    engine = _cls("Engine", "m")
+    built = _cls(
+        "Built",
+        "m",
+        attributes=[
+            AttributeInfo(name="engine", type_annotation="Engine | None", default="Engine()")
+        ],
+    )
+    lazy = _cls(
+        "Lazy",
+        "m",
+        attributes=[
+            AttributeInfo(name="engine", type_annotation="Engine | None", default="None")
+        ],
+    )
+
+    rels = detect_relationships([engine, built, lazy])
+
+    assert (
+        next(r for r in rels if r.source == "m.Built").relation_type == RelationType.COMPOSITION
+    )
+    assert (
+        next(r for r in rels if r.source == "m.Lazy").relation_type == RelationType.ASSOCIATION
+    )
+
+
+def test_init_list_literal_is_composition():
+    """self.users: List[User] = [] : le conteneur est construit par la classe."""
+    user = _cls("User", "m")
+    svc = _cls(
+        "Svc",
+        "m",
+        attributes=[AttributeInfo(name="users", type_annotation="List[User]", default="[]")],
+    )
+
+    rels = detect_relationships([user, svc])
+
+    rel = next(r for r in rels if r.target == "m.User")
+    assert rel.relation_type == RelationType.COMPOSITION
+
+
+def test_field_default_without_factory_is_association():
+    """field(default=None) ne construit rien : simple référence."""
+    engine = _cls("Engine", "m")
+    holder = _cls(
+        "Holder",
+        "m",
+        attributes=[
+            AttributeInfo(
+                name="engine",
+                type_annotation="Engine | None",
+                default="field(default=None)",
+            )
+        ],
+    )
+
+    rels = detect_relationships([engine, holder])
+
+    rel = next(r for r in rels if r.source == "m.Holder")
+    assert rel.relation_type == RelationType.ASSOCIATION

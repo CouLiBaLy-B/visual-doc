@@ -85,6 +85,59 @@ def _extract_types_from_annotation(annotation: str) -> list[str]:
     return [t for t in _classify_annotation_types(annotation) if t not in _IGNORED_TYPE_NAMES]
 
 
+def _constructed_call_name(default: str | None) -> str | None:
+    """Nom (éventuellement pointé) du callable si la valeur par défaut CONSTRUIT une instance.
+
+    'Engine()' -> 'Engine' ; 'mod.Engine(x)' -> 'mod.Engine' ;
+    'field(default_factory=Engine)' -> 'Engine' (idem 'dataclasses.field') ;
+    '[]' -> 'list' ; '{}' -> 'dict' ; '{1}' -> 'set' ;
+    'engine' / 'None' / 'field(default=...)' / lambda -> None.
+    """
+    if not default:
+        return None
+    try:
+        node = ast.parse(default, mode="eval").body
+    except SyntaxError:
+        return None
+    if isinstance(node, (ast.List, ast.ListComp)):
+        return "list"
+    if isinstance(node, (ast.Dict, ast.DictComp)):
+        return "dict"
+    if isinstance(node, (ast.Set, ast.SetComp)):
+        return "set"
+    if not isinstance(node, ast.Call):
+        return None
+    func = ast.unparse(node.func)
+    if func in ("field", "dataclasses.field"):
+        for kw in node.keywords:
+            # default_factory=lambda: ... n'est pas une construction identifiable
+            if kw.arg == "default_factory" and isinstance(kw.value, (ast.Name, ast.Attribute)):
+                return ast.unparse(kw.value)
+        return None  # field(default=...) : valeur partagée, pas une construction
+    return func
+
+
+def _classify_attribute_relation(
+    attr_default: str | None, type_name: str, in_collection: bool
+) -> RelationType:
+    """Classifie la relation portée par un attribut typé.
+
+    Sémantique : composition = instance ou conteneur construit par la classe ;
+    agrégation = collection typée reçue ; association = référence stockée.
+    """
+    ctor = _constructed_call_name(attr_default)
+    ctor_short = ctor.split(".")[-1] if ctor else None
+    if in_collection:
+        if ctor_short in _COLLECTION_TYPES:
+            # la classe construit son conteneur (field(default_factory=list),
+            # self.items: list[X] = []) : elle en possède le cycle de vie
+            return RelationType.COMPOSITION
+        return RelationType.AGGREGATION
+    if ctor_short == type_name:  # noms courts : gère aussi mod.Engine()
+        return RelationType.COMPOSITION
+    return RelationType.ASSOCIATION
+
+
 def _resolve_simple(
     simple: str,
     name_map: dict[str, list[str]],
@@ -155,15 +208,7 @@ def detect_relationships(classes: list[ClassInfo]) -> list[RelationInfo]:
                 target = _resolve_simple(type_name, name_to_qualified, cls.module)
                 if not target or target == cls.qualified_name:
                     continue
-                if in_collection:
-                    # collection d'instances : agrégation
-                    rel_type = RelationType.AGGREGATION
-                elif attr.default and attr.default.startswith(f"{type_name}("):
-                    # instance construite par la classe : composition
-                    rel_type = RelationType.COMPOSITION
-                else:
-                    # simple référence (paramètre stocké, champ dataclass) : association
-                    rel_type = RelationType.ASSOCIATION
+                rel_type = _classify_attribute_relation(attr.default, type_name, in_collection)
                 relations.append(
                     RelationInfo(
                         source=cls.qualified_name,

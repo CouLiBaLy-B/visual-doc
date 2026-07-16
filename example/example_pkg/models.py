@@ -112,10 +112,10 @@ class PremiumUser(User):
 
 @dataclass
 class OrderItem:
-    """Ligne de commande - Composition avec Product.
+    """Ligne de commande - Association avec Product.
 
     Attributes:
-        product: Produit commandé (composition).
+        product: Produit commandé (association : référence injectée).
         quantity: Quantité.
     """
 

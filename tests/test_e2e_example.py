@@ -107,3 +107,23 @@ def test_diagrams_deterministic_across_hash_seeds():
         outputs.append(result.stdout)
 
     assert outputs[0] == outputs[1]
+
+
+def test_example_pkg_relation_semantics():
+    """Verrouille la sémantique validée sur l'exemple : composition = construit par
+    la classe, agrégation = collection reçue, association = référence stockée."""
+    pkg = analyze_package(EXAMPLE_PKG, package_name="example_pkg")
+
+    rels = {(r.source, r.target): r.relation_type for r in pkg.relations}
+    m, s = "example_pkg.models.", "example_pkg.services."
+
+    # dataclass : conteneur construit via field(default_factory=list)
+    assert rels[(m + "Order", m + "OrderItem")] == RelationType.COMPOSITION
+    # références injectées par le constructeur généré
+    assert rels[(m + "Order", m + "User")] == RelationType.ASSOCIATION
+    assert rels[(m + "OrderItem", m + "Product")] == RelationType.ASSOCIATION
+    # self.x = param (référence stockée)
+    assert rels[(s + "OrderService", s + "UserService")] == RelationType.ASSOCIATION
+    # self.xs: List[X] = [] (conteneur construit dans __init__)
+    assert rels[(s + "OrderService", m + "Order")] == RelationType.COMPOSITION
+    assert rels[(s + "UserService", m + "User")] == RelationType.COMPOSITION
