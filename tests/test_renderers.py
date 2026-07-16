@@ -291,3 +291,45 @@ def test_svg_rows_do_not_overlap():
         col.sort()
         for (y1, h1), (y2, _h2) in zip(col, col[1:], strict=False):
             assert y2 >= y1 + h1, "chevauchement vertical de boîtes"
+
+
+def test_escape_mermaid_type_union_and_generics():
+    """L'échappement Mermaid neutralise | (unions) et , (génériques)."""
+    from gendoc.renderers.common import escape_mermaid_type
+
+    assert escape_mermaid_type("dict[str, Item | None]") == "dict~str‚ Item ¦ None~"
+
+
+def test_mermaid_union_types_have_no_raw_pipe():
+    """Un membre typé `X | None` ne contient pas de | brut (aléa de parsing Mermaid)."""
+    c = _cls(
+        "Holder",
+        "m",
+        attributes=[
+            AttributeInfo(name="note", type_annotation="str | None"),
+            AttributeInfo(name="store", type_annotation="dict[str, object]"),
+        ],
+        methods=[MethodInfo(name="find", parameters=[("self", None), ("q", "str | None")])],
+    )
+
+    mermaid = generate_class_diagram_mermaid({c.qualified_name: c}, [])
+
+    # n'inspecter que les lignes de membres (les arêtes <|-- portent un | légitime)
+    member_lines = [line for line in mermaid.splitlines() if line.startswith("        ")]
+    assert member_lines
+    assert not any("|" in line for line in member_lines)
+    assert "+note str ¦ None" in mermaid
+    assert "+store dict~str‚ object~" in mermaid
+
+
+def test_mermaid_method_param_separator_comma_preserved():
+    """La virgule entre paramètres reste brute ; seule celle des génériques est échappée."""
+    c = _cls(
+        "Svc",
+        "m",
+        methods=[MethodInfo(name="run", parameters=[("self", None), ("a", "int"), ("b", "str")])],
+    )
+
+    mermaid = generate_class_diagram_mermaid({c.qualified_name: c}, [])
+
+    assert "+run(a: int, b: str)" in mermaid

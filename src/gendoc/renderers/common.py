@@ -115,16 +115,28 @@ def escape_plantuml_note_line(text: str) -> str:
     return re.sub(r"end\s*note", "end_note", text, flags=re.IGNORECASE)
 
 
+# Homoglyphes visuellement fidèles pour les caractères que la grammaire des
+# membres Mermaid ne tolère pas : `|` des unions (hors grammaire) et `,` à
+# l'intérieur des génériques ~...~ (explicitement interdite par Mermaid).
+_MERMAID_TYPE_TRANS = str.maketrans(
+    {
+        "[": "~",  # génériques : syntaxe Mermaid X~Y~
+        "]": "~",
+        "{": "(",  # une accolade fermerait le bloc de classe
+        "}": ")",
+        "|": "¦",  # ¦ BROKEN BAR
+        ",": "‚",  # ‚ SINGLE LOW-9 QUOTATION MARK
+    }
+)
+
+
 def escape_mermaid_type(type_str: str) -> str:
     """Adapte une annotation de type Python à la syntaxe des membres Mermaid.
 
-    Les génériques s'écrivent X~Y~ en Mermaid ; les accolades termineraient
-    le bloc de classe. À appliquer aux annotations uniquement, jamais à la
-    ligne de membre complète.
+    À appliquer aux annotations uniquement, jamais à la ligne de membre
+    complète (les virgules *entre* paramètres sont légales en Mermaid).
     """
-    return (
-        type_str.replace("[", "~").replace("]", "~").replace("{", "(").replace("}", ")")
-    )
+    return type_str.translate(_MERMAID_TYPE_TRANS)
 
 
 # --- Formatage des membres (attributs / méthodes) par cible -------------------
