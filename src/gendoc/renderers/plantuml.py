@@ -8,9 +8,11 @@ if TYPE_CHECKING:
     from ..analyzer.models import ClassInfo, RelationInfo
 
 from .common import (
+    attribute_plantuml,
     escape_plantuml_note_line,
     filter_members,
     format_relation_edge,
+    method_plantuml,
     sanitize_id,
 )
 from .mermaid import _relations_for_module, extend_with_stubs
@@ -42,11 +44,11 @@ def generate_class_diagram_plantuml(
         lines.append(f'class "{cls.name}" as {node_id} {{')
         attrs, methods = filter_members(cls, public_only)
         for attr in attrs:
-            lines.append(f"    {attr.plantuml_str()}")
+            lines.append(f"    {attribute_plantuml(attr)}")
         if attrs and methods:
             lines.append("    --")
         for method in methods:
-            lines.append(f"    {method.plantuml_signature()}")
+            lines.append(f"    {method_plantuml(method)}")
         lines.append("}")
 
         if cls.docstring and not public_only:

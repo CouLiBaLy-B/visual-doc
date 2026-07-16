@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from ..analyzer.models import ClassInfo, PackageInfo, RelationInfo
 
 from ..analyzer.models import RelationType
-from .common import circular_edge_set, sorted_package_edges
+from .common import attribute_plain, circular_edge_set, method_plain, sorted_package_edges
 from .common import escape_svg_text as _escape
 
 
@@ -143,7 +143,7 @@ def generate_class_diagram_svg(
 
         cur_y = y + 40
         for attr in attrs:
-            txt = _truncate(attr.plain_str())
+            txt = _truncate(attribute_plain(attr))
             svg_parts.append(
                 f'<text x="{x + 8}" y="{cur_y}" class="class-member">{_escape(txt)}</text>'
             )
@@ -154,7 +154,7 @@ def generate_class_diagram_svg(
                 'class="class-sep" stroke-dasharray="3,3"/>'
             )
         for method in methods:
-            txt = _truncate(method.plain_signature())
+            txt = _truncate(method_plain(method))
             svg_parts.append(
                 f'<text x="{x + 8}" y="{cur_y}" class="class-member">{_escape(txt)}</text>'
             )

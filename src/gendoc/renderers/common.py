@@ -12,7 +12,7 @@ import html
 import re
 from typing import TYPE_CHECKING
 
-from ..analyzer.models import RelationType
+from ..analyzer.models import RelationType, Visibility
 
 if TYPE_CHECKING:
     from ..analyzer.models import (
@@ -113,3 +113,88 @@ def escape_svg_text(text: str) -> str:
 def escape_plantuml_note_line(text: str) -> str:
     """Neutralise un contenu de note qui terminerait le bloc (`end note`)."""
     return re.sub(r"end\s*note", "end_note", text, flags=re.IGNORECASE)
+
+
+def escape_mermaid_type(type_str: str) -> str:
+    """Adapte une annotation de type Python à la syntaxe des membres Mermaid.
+
+    Les génériques s'écrivent X~Y~ en Mermaid ; les accolades termineraient
+    le bloc de classe. À appliquer aux annotations uniquement, jamais à la
+    ligne de membre complète.
+    """
+    return (
+        type_str.replace("[", "~").replace("]", "~").replace("{", "(").replace("}", ")")
+    )
+
+
+# --- Formatage des membres (attributs / méthodes) par cible -------------------
+
+_VISIBILITY_CHARS: dict[Visibility, str] = {
+    Visibility.PUBLIC: "+",
+    Visibility.PRIVATE: "-",
+    Visibility.PROTECTED: "#",
+    Visibility.DUNDER: "+",
+}
+
+
+def visibility_char(visibility: Visibility) -> str:
+    return _VISIBILITY_CHARS.get(visibility, "+")
+
+
+def _method_display_name(method: MethodInfo) -> str:
+    return f"async {method.name}" if method.is_async else method.name
+
+
+def attribute_mermaid(attr: AttributeInfo) -> str:
+    type_part = f" {escape_mermaid_type(attr.type_annotation)}" if attr.type_annotation else ""
+    return f"{visibility_char(attr.visibility)}{attr.name}{type_part}"
+
+
+def attribute_plain(attr: AttributeInfo) -> str:
+    """Représentation texte brut (SVG), types non transformés."""
+    type_part = f" {attr.type_annotation}" if attr.type_annotation else ""
+    return f"{visibility_char(attr.visibility)}{attr.name}{type_part}"
+
+
+def attribute_plantuml(attr: AttributeInfo) -> str:
+    type_part = f" : {attr.type_annotation}" if attr.type_annotation else ""
+    return f"{visibility_char(attr.visibility)} {attr.name}{type_part}"
+
+
+def method_mermaid(method: MethodInfo) -> str:
+    params = ", ".join(
+        f"{n}: {escape_mermaid_type(t)}" if t else n
+        for n, t in method.parameters
+        if n != "self"
+    )
+    ret = f" {escape_mermaid_type(method.return_type)}" if method.return_type else ""
+    stereotype = ""
+    if method.is_static:
+        stereotype = "<<static>> "
+    elif method.is_classmethod:
+        stereotype = "<<classmethod>> "
+    return (
+        f"{visibility_char(method.visibility)}{stereotype}"
+        f"{_method_display_name(method)}({params}){ret}"
+    )
+
+
+def method_plain(method: MethodInfo) -> str:
+    """Représentation texte brut (SVG), types non transformés."""
+    params = ", ".join(f"{n}: {t}" if t else n for n, t in method.parameters if n != "self")
+    ret = f" {method.return_type}" if method.return_type else ""
+    return f"{visibility_char(method.visibility)}{_method_display_name(method)}({params}){ret}"
+
+
+def method_plantuml(method: MethodInfo) -> str:
+    params = ", ".join(f"{n}: {t}" if t else n for n, t in method.parameters if n != "self")
+    ret = f" : {method.return_type}" if method.return_type else ""
+    stereotype = ""
+    if method.is_static or method.is_classmethod:
+        stereotype = "{static} "
+    elif method.is_abstract:
+        stereotype = "{abstract} "
+    return (
+        f"{visibility_char(method.visibility)} {stereotype}"
+        f"{_method_display_name(method)}({params}){ret}"
+    )

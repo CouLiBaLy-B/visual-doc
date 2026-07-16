@@ -10,7 +10,13 @@ if TYPE_CHECKING:
 
 from ..analyzer.models import ClassInfo as _ClassInfo
 from ..analyzer.models import RelationType
-from .common import filter_members, format_relation_edge, sanitize_id
+from .common import (
+    attribute_mermaid,
+    filter_members,
+    format_relation_edge,
+    method_mermaid,
+    sanitize_id,
+)
 
 __all__ = [
     "sanitize_id",
@@ -29,10 +35,10 @@ def _format_class_mermaid(
     attrs, methods = filter_members(cls, public_only)
     lines = [f'    class {node_id}["{cls.name}"] {{']
     for attr in attrs[:50]:  # limiter
-        lines.append(f"        {attr.mermaid_str()}")
+        lines.append(f"        {attribute_mermaid(attr)}")
     method_list = methods[:max_methods] if max_methods else methods
     for method in method_list:
-        lines.append(f"        {method.mermaid_signature()}")
+        lines.append(f"        {method_mermaid(method)}")
     lines.append("    }")
     return "\n".join(lines)
 

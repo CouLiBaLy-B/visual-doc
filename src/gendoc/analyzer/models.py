@@ -21,20 +21,6 @@ class RelationType(StrEnum):
     AGGREGATION = "aggregation"
 
 
-_VISIBILITY_CHARS = {"public": "+", "private": "-", "protected": "#", "dunder": "+"}
-
-
-def _mermaid_safe_type(type_str: str) -> str:
-    """Adapte un type Python à la syntaxe des membres Mermaid.
-
-    Les génériques s'écrivent X~Y~ en Mermaid ; les accolades termineraient
-    le bloc de classe.
-    """
-    return (
-        type_str.replace("[", "~").replace("]", "~").replace("{", "(").replace("}", ")")
-    )
-
-
 @dataclass
 class AttributeInfo:
     """Représente un attribut de classe."""
@@ -44,22 +30,6 @@ class AttributeInfo:
     default: str | None = None
     visibility: Visibility = Visibility.PUBLIC
     is_class_attribute: bool = False
-
-    def mermaid_str(self) -> str:
-        type_part = f" {_mermaid_safe_type(self.type_annotation)}" if self.type_annotation else ""
-        visibility_char = _VISIBILITY_CHARS.get(self.visibility.value, "+")
-        return f"{visibility_char}{self.name}{type_part}"
-
-    def plain_str(self) -> str:
-        """Représentation texte brut (SVG), types non transformés."""
-        type_part = f" {self.type_annotation}" if self.type_annotation else ""
-        visibility_char = _VISIBILITY_CHARS.get(self.visibility.value, "+")
-        return f"{visibility_char}{self.name}{type_part}"
-
-    def plantuml_str(self) -> str:
-        type_part = f" : {self.type_annotation}" if self.type_annotation else ""
-        visibility_char = _VISIBILITY_CHARS.get(self.visibility.value, "+")
-        return f"{visibility_char} {self.name}{type_part}"
 
 
 @dataclass
@@ -77,42 +47,6 @@ class MethodInfo:
     is_async: bool = False
     defaults: dict[str, str] = field(default_factory=dict)  # param -> valeur par défaut
     docstring: str | None = None
-
-    def _display_name(self) -> str:
-        return f"async {self.name}" if self.is_async else self.name
-
-    def mermaid_signature(self) -> str:
-        visibility_char = _VISIBILITY_CHARS.get(self.visibility.value, "+")
-        params = ", ".join(
-            f"{n}: {_mermaid_safe_type(t)}" if t else n
-            for n, t in self.parameters
-            if n != "self"
-        )
-        ret = f" {_mermaid_safe_type(self.return_type)}" if self.return_type else ""
-        stereotype = ""
-        if self.is_static:
-            stereotype = "<<static>> "
-        elif self.is_classmethod:
-            stereotype = "<<classmethod>> "
-        return f"{visibility_char}{stereotype}{self._display_name()}({params}){ret}"
-
-    def plain_signature(self) -> str:
-        """Représentation texte brut (SVG), types non transformés."""
-        visibility_char = _VISIBILITY_CHARS.get(self.visibility.value, "+")
-        params = ", ".join(f"{n}: {t}" if t else n for n, t in self.parameters if n != "self")
-        ret = f" {self.return_type}" if self.return_type else ""
-        return f"{visibility_char}{self._display_name()}({params}){ret}"
-
-    def plantuml_signature(self) -> str:
-        visibility_char = _VISIBILITY_CHARS.get(self.visibility.value, "+")
-        params = ", ".join(f"{n}: {t}" if t else n for n, t in self.parameters if n != "self")
-        ret = f" : {self.return_type}" if self.return_type else ""
-        stereotype = ""
-        if self.is_static or self.is_classmethod:
-            stereotype = "{static} "
-        elif self.is_abstract:
-            stereotype = "{abstract} "
-        return f"{visibility_char} {stereotype}{self._display_name()}({params}){ret}"
 
 
 @dataclass
