@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..analyzer.models import ClassInfo, RelationInfo
 
-from ..analyzer.models import RelationType
-from .mermaid import _relations_for_module, extend_with_stubs, sanitize_id
-
-
-def _sanitize_note_line(text: str) -> str:
-    """Neutralise un contenu de note qui terminerait le bloc (`end note`)."""
-    return re.sub(r"end\s*note", "end_note", text, flags=re.IGNORECASE)
+from .common import (
+    escape_plantuml_note_line,
+    filter_members,
+    format_relation_edge,
+    sanitize_id,
+)
+from .mermaid import _relations_for_module, extend_with_stubs
 
 
 def generate_class_diagram_plantuml(
@@ -41,14 +40,9 @@ def generate_class_diagram_plantuml(
     for cls in sorted_classes:
         node_id = node_ids[cls.qualified_name]
         lines.append(f'class "{cls.name}" as {node_id} {{')
-        attrs = cls.attributes
-        if public_only:
-            attrs = [a for a in attrs if a.visibility.value == "public"]
+        attrs, methods = filter_members(cls, public_only)
         for attr in attrs:
             lines.append(f"    {attr.plantuml_str()}")
-        methods = cls.methods
-        if public_only:
-            methods = [m for m in methods if m.visibility.value == "public"]
         if attrs and methods:
             lines.append("    --")
         for method in methods:
@@ -56,7 +50,7 @@ def generate_class_diagram_plantuml(
         lines.append("}")
 
         if cls.docstring and not public_only:
-            first_line = _sanitize_note_line(cls.docstring.strip().split("\n")[0][:80])
+            first_line = escape_plantuml_note_line(cls.docstring.strip().split("\n")[0][:80])
             lines.append(f"note top of {node_id}")
             lines.append(f"  {first_line}")
             lines.append("end note")
@@ -64,20 +58,7 @@ def generate_class_diagram_plantuml(
     for rel in relations:
         if rel.source not in node_ids or rel.target not in node_ids:
             continue
-        src = node_ids[rel.source]
-        tgt = node_ids[rel.target]
-        label = f" : {rel.label}" if rel.label else ""
-
-        if rel.relation_type == RelationType.INHERITANCE:
-            lines.append(f"{tgt} <|-- {src}")
-        elif rel.relation_type == RelationType.COMPOSITION:
-            lines.append(f"{src} *-- {tgt}{label}")
-        elif rel.relation_type == RelationType.AGGREGATION:
-            lines.append(f"{src} o-- {tgt}{label}")
-        elif rel.relation_type == RelationType.ASSOCIATION:
-            lines.append(f"{src} --> {tgt}{label}")
-        elif rel.relation_type == RelationType.DEPENDENCY:
-            lines.append(f"{src} ..> {tgt}{label}")
+        lines.append(format_relation_edge(rel, node_ids[rel.source], node_ids[rel.target]))
 
     lines.append("@enduml")
     return "\n".join(lines)

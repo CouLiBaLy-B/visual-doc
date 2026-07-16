@@ -7,35 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..analyzer.models import PackageInfo
 
-from .mermaid import sanitize_id
-
-
-def _circular_edge_set(
-    circular_dependencies: list[list[str]],
-) -> tuple[set[str], set[tuple[str, str]]]:
-    """Noeuds et arêtes orientées des cycles (y compris l'arête de fermeture)."""
-    nodes: set[str] = set()
-    edges: set[tuple[str, str]] = set()
-    for cycle in circular_dependencies:
-        for i in range(len(cycle)):
-            src = cycle[i]
-            tgt = cycle[(i + 1) % len(cycle)]
-            if src == tgt:
-                continue
-            nodes.add(src)
-            nodes.add(tgt)
-            edges.add((src, tgt))
-    return nodes, edges
-
-
-def _sorted_edges(package_info: PackageInfo) -> list[tuple[str, str]]:
-    """Arêtes internes du graphe de dépendances, en ordre déterministe."""
-    return [
-        (src, tgt)
-        for src in sorted(package_info.dependencies)
-        for tgt in sorted(package_info.dependencies[src])
-        if tgt in package_info.modules
-    ]
+from .common import circular_edge_set, sanitize_id, sorted_package_edges
 
 
 def generate_package_diagram_mermaid(
@@ -51,7 +23,7 @@ def generate_package_diagram_mermaid(
     circular_nodes: set[str] = set()
     circular_edges: set[tuple[str, str]] = set()
     if highlight_circular and package_info.circular_dependencies:
-        circular_nodes, circular_edges = _circular_edge_set(package_info.circular_dependencies)
+        circular_nodes, circular_edges = circular_edge_set(package_info.circular_dependencies)
 
     for mod in modules_sorted:
         lines.append(f"    {sanitize_id(mod)}[{mod.split('.')[-1]}]")
@@ -59,7 +31,7 @@ def generate_package_diagram_mermaid(
     lines.append("")
 
     # une seule liste d'arêtes : sert à la fois à l'émission et aux indices linkStyle
-    edges = _sorted_edges(package_info)
+    edges = sorted_package_edges(package_info)
     for src, tgt in edges:
         if (src, tgt) in circular_edges:
             lines.append(f"    {sanitize_id(src)} -->|circular| {sanitize_id(tgt)}")
@@ -91,9 +63,9 @@ def generate_package_diagram_plantuml(package_info: PackageInfo) -> str:
         lines.append(f"  [{mod}] as {sanitize_id(mod)}")
     lines.append("}")
 
-    _, circular_edges = _circular_edge_set(package_info.circular_dependencies)
+    _, circular_edges = circular_edge_set(package_info.circular_dependencies)
 
-    for src, tgt in _sorted_edges(package_info):
+    for src, tgt in sorted_package_edges(package_info):
         src_id = sanitize_id(src)
         tgt_id = sanitize_id(tgt)
         if (src, tgt) in circular_edges:

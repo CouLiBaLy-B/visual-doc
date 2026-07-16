@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import html
 import math
 from typing import TYPE_CHECKING
 
@@ -10,10 +9,8 @@ if TYPE_CHECKING:
     from ..analyzer.models import ClassInfo, PackageInfo, RelationInfo
 
 from ..analyzer.models import RelationType
-
-
-def _escape(text: str) -> str:
-    return html.escape(text)
+from .common import circular_edge_set, sorted_package_edges
+from .common import escape_svg_text as _escape
 
 
 def _truncate(text: str, limit: int = 30) -> str:
@@ -199,16 +196,7 @@ def generate_package_diagram_svg(package_info: PackageInfo, width: int = 900) ->
         positions[mod] = (x, y)
 
     # cycles : arêtes orientées, y compris celle qui referme la boucle
-    circular_nodes = set()
-    circular_edges = set()
-    for cycle in package_info.circular_dependencies:
-        for i in range(len(cycle)):
-            src, tgt = cycle[i], cycle[(i + 1) % len(cycle)]
-            if src == tgt:
-                continue
-            circular_edges.add((src, tgt))
-            circular_nodes.add(src)
-            circular_nodes.add(tgt)
+    circular_nodes, circular_edges = circular_edge_set(package_info.circular_dependencies)
 
     svg_parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{total_w}" height="{total_h}" '
@@ -230,26 +218,23 @@ def generate_package_diagram_svg(package_info: PackageInfo, width: int = 900) ->
         "</defs>",
     ]
 
-    # dépendances (parcours trié pour une sortie déterministe)
-    for src in sorted(package_info.dependencies):
-        if src not in positions:
+    # dépendances (arêtes partagées, ordre déterministe)
+    for src, tgt in sorted_package_edges(package_info):
+        if src not in positions or tgt not in positions:
             continue
         x1, y1 = positions[src]
+        x2, y2 = positions[tgt]
         cx1 = x1 + box_w / 2
         cy1 = y1 + box_h / 2
-        for tgt in sorted(package_info.dependencies[src]):
-            if tgt not in positions:
-                continue
-            x2, y2 = positions[tgt]
-            cx2 = x2 + box_w / 2
-            cy2 = y2 + box_h / 2
-            is_circular = (src, tgt) in circular_edges
-            cls = "dep-circular" if is_circular else "dep-line"
-            marker = "url(#arrow-red)" if is_circular else "url(#arrow)"
-            svg_parts.append(
-                f'<line x1="{cx1}" y1="{cy1}" x2="{cx2}" y2="{cy2}" '
-                f'class="{cls}" marker-end="{marker}"/>'
-            )
+        cx2 = x2 + box_w / 2
+        cy2 = y2 + box_h / 2
+        is_circular = (src, tgt) in circular_edges
+        cls = "dep-circular" if is_circular else "dep-line"
+        marker = "url(#arrow-red)" if is_circular else "url(#arrow)"
+        svg_parts.append(
+            f'<line x1="{cx1}" y1="{cy1}" x2="{cx2}" y2="{cy2}" '
+            f'class="{cls}" marker-end="{marker}"/>'
+        )
 
     # boîtes
     for mod in modules:

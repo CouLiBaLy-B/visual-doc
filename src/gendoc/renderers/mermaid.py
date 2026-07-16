@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -11,22 +10,14 @@ if TYPE_CHECKING:
 
 from ..analyzer.models import ClassInfo as _ClassInfo
 from ..analyzer.models import RelationType
+from .common import filter_members, format_relation_edge, sanitize_id
 
-
-def sanitize_id(qualified_name: str) -> str:
-    """Transforme un nom qualifié en identifiant de nœud valide (Mermaid/PlantUML)."""
-    return re.sub(r"[^0-9A-Za-z_]", "_", qualified_name)
-
-
-def _filter_by_visibility(cls: ClassInfo, public_only: bool) -> tuple[list, list]:
-    """Filtre attributs/méthodes selon visibilité."""
-    if public_only:
-        attrs = [a for a in cls.attributes if a.visibility.value == "public"]
-        methods = [m for m in cls.methods if m.visibility.value == "public"]
-    else:
-        attrs = cls.attributes
-        methods = cls.methods
-    return attrs, methods
+__all__ = [
+    "sanitize_id",
+    "generate_class_diagram_mermaid",
+    "generate_module_class_diagram_mermaid",
+    "extend_with_stubs",
+]
 
 
 def _format_class_mermaid(
@@ -35,7 +26,7 @@ def _format_class_mermaid(
     public_only: bool = False,
     max_methods: int | None = None,
 ) -> str:
-    attrs, methods = _filter_by_visibility(cls, public_only)
+    attrs, methods = filter_members(cls, public_only)
     lines = [f'    class {node_id}["{cls.name}"] {{']
     for attr in attrs[:50]:  # limiter
         lines.append(f"        {attr.mermaid_str()}")
@@ -80,18 +71,9 @@ def generate_class_diagram_mermaid(
             continue
         src = node_ids[rel.source]
         tgt = node_ids[rel.target]
-        label = f" : {rel.label}" if rel.label else ""
-
-        if rel.relation_type == RelationType.INHERITANCE:
-            lines.append(f"    {tgt} <|-- {src}")
-        elif rel.relation_type == RelationType.COMPOSITION:
-            lines.append(f"    {src} *-- {tgt}{label}")
-        elif rel.relation_type == RelationType.AGGREGATION:
-            lines.append(f"    {src} o-- {tgt}{label}")
-        elif rel.relation_type == RelationType.ASSOCIATION:
-            lines.append(f"    {src} --> {tgt}{label}")
-        elif rel.relation_type == RelationType.DEPENDENCY:
-            lines.append(f"    {src} ..> {tgt}{label or ' : depends'}")
+        lines.append(
+            "    " + format_relation_edge(rel, src, tgt, default_dependency_label="depends")
+        )
 
     return "\n".join(lines)
 
