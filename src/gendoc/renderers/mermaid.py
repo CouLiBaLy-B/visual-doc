@@ -16,6 +16,7 @@ from .common import (
     format_relation_edge,
     method_mermaid,
     sanitize_id,
+    stereotype_label,
 )
 
 __all__ = [
@@ -34,6 +35,9 @@ def _format_class_mermaid(
 ) -> str:
     attrs, methods = filter_members(cls, public_only)
     lines = [f'    class {node_id}["{cls.name}"] {{']
+    label = stereotype_label(cls.stereotype)
+    if label:
+        lines.append(f"        <<{label}>>")
     for attr in attrs[:50]:  # limiter
         lines.append(f"        {attribute_mermaid(attr)}")
     method_list = methods[:max_methods] if max_methods else methods

@@ -14,6 +14,7 @@ from .common import (
     format_relation_edge,
     method_plantuml,
     sanitize_id,
+    stereotype_label,
 )
 from .mermaid import _relations_for_module, extend_with_stubs
 
@@ -41,7 +42,9 @@ def generate_class_diagram_plantuml(
 
     for cls in sorted_classes:
         node_id = node_ids[cls.qualified_name]
-        lines.append(f'class "{cls.name}" as {node_id} {{')
+        label = stereotype_label(cls.stereotype)
+        stereo = f" <<{label}>>" if label else ""
+        lines.append(f'class "{cls.name}" as {node_id}{stereo} {{')
         attrs, methods = filter_members(cls, public_only)
         for attr in attrs:
             lines.append(f"    {attribute_plantuml(attr)}")

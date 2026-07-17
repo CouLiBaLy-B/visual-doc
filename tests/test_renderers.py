@@ -333,3 +333,20 @@ def test_mermaid_method_param_separator_comma_preserved():
     mermaid = generate_class_diagram_mermaid({c.qualified_name: c}, [])
 
     assert "+run(a: int, b: str)" in mermaid
+
+
+def test_stereotypes_rendered_in_mermaid_and_plantuml():
+    """Les classes enum/dataclass portent leur stéréotype dans les deux formats."""
+    color = _cls("Color", "m", stereotype="enum")
+    order = _cls("Order", "m", stereotype="dataclass")
+    plain = _cls("Plain", "m")
+    classes = {c.qualified_name: c for c in (color, order, plain)}
+
+    mermaid = generate_class_diagram_mermaid(classes, [])
+    puml = generate_class_diagram_plantuml(classes, [])
+
+    assert "<<enumeration>>" in mermaid and "<<dataclass>>" in mermaid
+    assert 'as m_Color <<enumeration>>' in puml
+    assert 'as m_Order <<dataclass>>' in puml
+    assert 'as m_Plain {' in puml
+    assert mermaid.count("<<") == 2  # rien sur la classe sans stéréotype

@@ -42,6 +42,17 @@ def filter_members(
     return attrs, methods
 
 
+# Stéréotype de classe (analyzer) -> libellé UML affiché entre <<...>>.
+_STEREOTYPE_LABELS = {"enum": "enumeration", "dataclass": "dataclass"}
+
+
+def stereotype_label(stereotype: str | None) -> str | None:
+    """Libellé UML d'un stéréotype de classe, ou None s'il n'y a rien à afficher."""
+    if stereotype is None:
+        return None
+    return _STEREOTYPE_LABELS.get(stereotype, stereotype)
+
+
 # Table unique relation -> glyphe, partagée par les renderers texte.
 _RELATION_GLYPHS: dict[RelationType, str] = {
     RelationType.INHERITANCE: "<|--",  # émise inversée : target <|-- source

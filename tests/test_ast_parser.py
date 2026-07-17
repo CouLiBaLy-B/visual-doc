@@ -150,3 +150,45 @@ class C:
     by_name = {c.name: c for c in classes}
     attr = by_name["C"].attributes[0]
     assert attr.type_annotation == "User"
+
+
+def test_enum_class_has_stereotype_and_value_members(tmp_path):
+    """Une Enum est stéréotypée 'enum' et ses membres n'ont pas de type inféré."""
+    f = tmp_path / "colors.py"
+    f.write_text(
+        "from enum import Enum\n\n"
+        "class Color(Enum):\n"
+        "    RED = 1\n"
+        "    GREEN = 2\n"
+    )
+
+    classes = parse_file_for_classes(f, "colors")
+
+    color = next(c for c in classes if c.name == "Color")
+    assert color.stereotype == "enum"
+    members = {a.name: a for a in color.attributes}
+    assert members["RED"].type_annotation is None
+    assert members["RED"].default == "1"
+
+
+def test_dataclass_has_stereotype(tmp_path):
+    """@dataclass (nu ou paramétré, importé ou qualifié) est stéréotypé 'dataclass'."""
+    f = tmp_path / "dc.py"
+    f.write_text(
+        "import dataclasses\n"
+        "from dataclasses import dataclass\n\n"
+        "@dataclass\n"
+        "class Plain:\n"
+        "    x: int = 0\n\n"
+        "@dataclasses.dataclass(frozen=True)\n"
+        "class Frozen:\n"
+        "    y: int = 0\n\n"
+        "class Normal:\n"
+        "    pass\n"
+    )
+
+    classes = {c.name: c for c in parse_file_for_classes(f, "dc")}
+
+    assert classes["Plain"].stereotype == "dataclass"
+    assert classes["Frozen"].stereotype == "dataclass"
+    assert classes["Normal"].stereotype is None

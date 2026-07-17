@@ -61,6 +61,7 @@ class ClassInfo:
     methods: list[MethodInfo] = field(default_factory=list)
     docstring: str | None = None
     line_number: int = 0
+    stereotype: str | None = None  # "enum" | "dataclass" | None
 
     @property
     def qualified_name(self) -> str:

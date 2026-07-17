@@ -69,6 +69,26 @@ def parse_module_imports(file_path: Path) -> list[str]:
         return []
 
 
+# Bases marquant une énumération et décorateurs marquant une dataclass
+# (noms simples : `enum.Enum` et `dataclasses.dataclass` matchent par suffixe).
+_ENUM_BASES = {"Enum", "StrEnum", "IntEnum", "IntFlag", "Flag"}
+_DATACLASS_DECORATORS = {"dataclass"}
+
+
+def _class_stereotype(node: ast.ClassDef) -> str | None:
+    """Stéréotype UML de la classe : "enum", "dataclass" ou None."""
+    for base in node.bases:
+        base_name = (_annotation_to_str(base) or "").split(".")[-1]
+        if base_name in _ENUM_BASES:
+            return "enum"
+    for dec in node.decorator_list:
+        target = dec.func if isinstance(dec, ast.Call) else dec
+        dec_name = (_annotation_to_str(target) or "").split(".")[-1]
+        if dec_name in _DATACLASS_DECORATORS:
+            return "dataclass"
+    return None
+
+
 def _collect_class(
     node: ast.ClassDef,
     module_name: str,
@@ -95,6 +115,14 @@ def _collect_class(
             _add_assign_attrs(stmt, attributes, seen_attrs, in_class_body=True)
 
     bases = [b for b in (_annotation_to_str(base) for base in node.bases) if b]
+    stereotype = _class_stereotype(node)
+
+    if stereotype == "enum":
+        # les membres d'enum sont des valeurs nommées, pas des attributs typés
+        # (sinon RED = 1 serait rendu comme un attribut int)
+        for attr in attributes:
+            if attr.is_class_attribute:
+                attr.type_annotation = None
 
     out.append(
         ClassInfo(
@@ -106,6 +134,7 @@ def _collect_class(
             methods=methods,
             docstring=ast.get_docstring(node),
             line_number=node.lineno,
+            stereotype=stereotype,
         )
     )
 
