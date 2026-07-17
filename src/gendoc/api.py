@@ -16,6 +16,7 @@ Tout est 100% local, sans appel réseau.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from .analyzer import analyze_package, get_focused_subgraph
@@ -32,6 +33,8 @@ from .renderers import (
     generate_package_diagram_plantuml,
     generate_package_diagram_svg,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def analyze(
@@ -232,6 +235,7 @@ def check_package(package_path: str | Path) -> bool:
         analyze_package(Path(package_path))
         return True
     except Exception:
+        logger.debug("check_package(%s) a échoué", package_path, exc_info=True)
         return False
 
 

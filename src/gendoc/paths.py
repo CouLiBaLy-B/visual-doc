@@ -7,7 +7,10 @@ candidats, chaque consommateur choisit sa sérialisation.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def compute_import_paths(package_root: Path, cwd: Path | None = None) -> list[Path]:
@@ -22,8 +25,8 @@ def compute_import_paths(package_root: Path, cwd: Path | None = None) -> list[Pa
     try:
         pkg_root = package_root.resolve()
         paths.extend([pkg_root.parent, pkg_root, pkg_root.parent.parent])
-    except OSError:
-        pass
+    except OSError as e:
+        logger.debug("résolution de %s impossible: %s", package_root, e)
     src_path = base / "src"
     if src_path.exists():
         paths.append(src_path.resolve())

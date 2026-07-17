@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 from typing import TYPE_CHECKING
 
@@ -11,6 +12,8 @@ if TYPE_CHECKING:
 from ..analyzer.models import RelationType
 from .common import attribute_plain, circular_edge_set, method_plain, sorted_package_edges
 from .common import escape_svg_text as _escape
+
+logger = logging.getLogger(__name__)
 
 
 def _truncate(text: str, limit: int = 30) -> str:
@@ -288,7 +291,7 @@ def try_convert_svg_to_png(svg_path, png_path) -> bool:
         cairosvg.svg2png(url=str(svg_path), write_to=str(png_path))
         return True
     except ImportError:
-        pass
+        logger.debug("cairosvg absent, conversion PNG via outils externes")
     except Exception as e:
         import warnings
 
@@ -304,8 +307,8 @@ def try_convert_svg_to_png(svg_path, png_path) -> bool:
                 timeout=10,
             )
             return True
-        except (subprocess.SubprocessError, OSError):
-            pass
+        except (subprocess.SubprocessError, OSError) as e:
+            logger.debug("conversion inkscape échouée pour %s: %s", svg_path, e)
 
     if shutil.which("rsvg-convert"):
         try:
@@ -315,7 +318,7 @@ def try_convert_svg_to_png(svg_path, png_path) -> bool:
                 timeout=10,
             )
             return True
-        except (subprocess.SubprocessError, OSError):
-            pass
+        except (subprocess.SubprocessError, OSError) as e:
+            logger.debug("conversion rsvg-convert échouée pour %s: %s", svg_path, e)
 
     return False

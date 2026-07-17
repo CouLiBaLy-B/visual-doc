@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -269,7 +272,8 @@ enable_search = {toml_bool(self.enable_search)}
                             data = tomllib.loads(candidate.read_text(encoding="utf-8"))
                             if "tool" in data and "gendoc" in data["tool"]:
                                 return candidate
-                        except Exception:
+                        except Exception as e:
+                            logger.debug("pyproject.toml illisible dans %s: %s", candidate, e)
                             continue
                     else:
                         return candidate

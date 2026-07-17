@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 import time
 from pathlib import Path
@@ -17,6 +18,14 @@ from .builder import SiteBuilder
 from .config import load_config
 
 console = Console()
+
+
+def _configure_logging(verbose: bool) -> None:
+    """--verbose expose les logs DEBUG des modules gendoc (diagnostic)."""
+    logging.basicConfig(
+        level=logging.DEBUG if verbose else logging.WARNING,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
 
 
 def _mkdocs_env(package_info) -> dict[str, str]:

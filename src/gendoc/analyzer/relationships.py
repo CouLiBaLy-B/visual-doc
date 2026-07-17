@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ast
+import logging
 import re
 from collections import defaultdict, deque
 from typing import TYPE_CHECKING
@@ -10,6 +11,8 @@ if TYPE_CHECKING:
     from .models import ClassInfo
 
 from .models import RelationInfo, RelationType
+
+logger = logging.getLogger(__name__)
 
 # Noms de types à ignorer lors de l'extraction (builtins + typing)
 _IGNORED_TYPE_NAMES = {
@@ -74,7 +77,7 @@ def _classify_annotation_types(annotation: str) -> dict[str, bool]:
             try:
                 visit(ast.parse(node.value, mode="eval").body, in_collection)
             except SyntaxError:
-                pass
+                logger.debug("forward reference non parsable ignorée: %r", node.value)
 
     visit(tree.body, False)
     return result

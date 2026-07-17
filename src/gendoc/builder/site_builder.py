@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import time
 import warnings
@@ -9,6 +10,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from jinja2 import Template
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..analyzer.models import PackageInfo
@@ -341,6 +344,11 @@ class SiteBuilder:
                     public_only=self.config.public_only,
                 )
             except Exception:
+                logger.warning(
+                    "génération du diagramme de %s échouée, diagramme minimal émis",
+                    dotted,
+                    exc_info=True,
+                )
                 mermaid = (
                     f"classDiagram\n    %% Erreur génération pour {dotted}\n    class {display}"
                 )
