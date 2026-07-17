@@ -197,18 +197,11 @@ Workflow fourni : [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 - **lint** : `ruff check` + `mypy` ;
 - **test** : `pytest` avec couverture ≥ 80 %, matrice Python 3.11 / 3.12 / 3.13 ;
 - **docs** : `gendoc check` sur le package d'exemple (échoue si code non analysable),
-  `gendoc build`, et publication du site généré en artifact.
+  `gendoc build`, et publication du site généré en artifact ;
+- **deploy** : sur `main`, déploie le site d'exemple sur GitHub Pages
+  (`actions/deploy-pages`).
 
-Pour déployer sur GitHub Pages, ajoutez à la suite du job `docs` :
-
-```yaml
-- uses: actions/upload-pages-artifact@v3
-  with:
-    path: site/
-- uses: actions/deploy-pages@v4
-```
-
-Activez Pages : Settings → Pages → Source → GitHub Actions.
+Pour activer la démo en ligne : Settings → Pages → Source → GitHub Actions.
 
 ---
 

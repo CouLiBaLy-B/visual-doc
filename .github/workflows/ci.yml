@@ -57,3 +57,25 @@ jobs:
           name: demo-site
           path: site/
           if-no-files-found: error
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+
+  deploy:
+    # Démo en ligne : déploie le site d'exemple sur GitHub Pages (main uniquement).
+    # Activer Pages : Settings → Pages → Source → GitHub Actions.
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [docs, test, lint]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
