@@ -101,6 +101,7 @@ def build(
     (défaut: package_path du gendoc.toml, sinon le répertoire courant)
     """
 
+    _configure_logging(verbose)
     start = time.time()
 
     # Charger config (l'argument CLI, s'il est fourni, prime sur le TOML)
