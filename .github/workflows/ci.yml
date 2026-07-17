@@ -76,6 +76,12 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Configure Pages
+        # enablement: true active Pages (source: GitHub Actions) si ce n'est
+        # pas déjà fait — évite le 404 « Ensure GitHub Pages has been enabled »
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
