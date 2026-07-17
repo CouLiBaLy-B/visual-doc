@@ -43,18 +43,15 @@ def foo():
 def test_infer_type_from_value():
     import ast
 
-    # List
-    node = ast.parse("x = []").body[0].value
-    assert ast_parser._infer_type_from_value(node) == "list"
-    # Dict
-    node = ast.parse("x = {}").body[0].value
-    assert ast_parser._infer_type_from_value(node) == "dict"
-    # Constant
-    node = ast.parse("x = 5").body[0].value
-    assert ast_parser._infer_type_from_value(node) == "int"
-    # Call
-    node = ast.parse("x = MyClass()").body[0].value
-    assert ast_parser._infer_type_from_value(node) == "MyClass"
+    def value_of(src: str) -> ast.expr:
+        stmt = ast.parse(src).body[0]
+        assert isinstance(stmt, ast.Assign)
+        return stmt.value
+
+    assert ast_parser._infer_type_from_value(value_of("x = []")) == "list"
+    assert ast_parser._infer_type_from_value(value_of("x = {}")) == "dict"
+    assert ast_parser._infer_type_from_value(value_of("x = 5")) == "int"
+    assert ast_parser._infer_type_from_value(value_of("x = MyClass()")) == "MyClass"
 
 
 def test_cli_build_with_mkdocs_mock(temp_package: Path, tmp_path: Path):

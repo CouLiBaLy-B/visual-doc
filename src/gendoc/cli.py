@@ -6,6 +6,7 @@ import logging
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
 from rich.console import Console
@@ -16,6 +17,9 @@ from . import __version__
 from .analyzer import analyze_package
 from .builder import SiteBuilder
 from .config import load_config
+
+if TYPE_CHECKING:
+    from .analyzer.models import PackageInfo
 
 console = Console()
 
@@ -28,7 +32,7 @@ def _configure_logging(verbose: bool) -> None:
     )
 
 
-def _mkdocs_env(package_info) -> dict[str, str]:
+def _mkdocs_env(package_info: PackageInfo) -> dict[str, str]:
     """Environnement pour mkdocs : PYTHONPATH permettant à mkdocstrings d'importer le package."""
     import os
 

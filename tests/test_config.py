@@ -77,7 +77,8 @@ def test_config_merge_cli():
 
 def test_config_coerces_string_paths():
     """Les chemins passés en str sont convertis en Path (exemple du README)."""
-    cfg = GendocConfig(package_path="src/mon_pkg", output_dir="site_x", docs_dir="docs_x")
+    # str accepté à l'exécution (coercion __post_init__), la dataclass est typée Path
+    cfg = GendocConfig(package_path="src/mon_pkg", output_dir="site_x", docs_dir="docs_x")  # type: ignore[arg-type]
 
     assert isinstance(cfg.package_path, Path)
     assert isinstance(cfg.output_dir, Path)
@@ -89,10 +90,11 @@ def test_build_docs_with_config_accepts_string_paths(temp_package, tmp_path: Pat
     import gendoc
 
     monkeypatch.chdir(tmp_path)
+    # str coercé en Path par __post_init__ (usage documenté)
     cfg = GendocConfig(
-        package_path=str(temp_package),
-        output_dir="site_str",
-        docs_dir="docs_str",
+        package_path=str(temp_package),  # type: ignore[arg-type]
+        output_dir="site_str",  # type: ignore[arg-type]
+        docs_dir="docs_str",  # type: ignore[arg-type]
         package_name="testpkg",
     )
     docs = gendoc.build_docs_with_config(cfg)

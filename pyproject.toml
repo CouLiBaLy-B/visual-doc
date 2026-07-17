@@ -84,8 +84,24 @@ target-version = "py311"
 select = ["E", "F", "I", "B", "C4", "UP"]
 ignore = []
 
+# Base commune (s'applique aussi aux tests, vérifiés via check_untyped_defs) ;
+# la source gendoc.* est durcie par l'override ci-dessous.
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "gendoc.*"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+# dépendance optionnelle sans stubs : override ciblé plutôt qu'un
+# ignore_missing_imports global
+[[tool.mypy.overrides]]
+module = "cairosvg"
 ignore_missing_imports = true

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -267,19 +268,16 @@ def _empty_svg(message: str, width: int) -> str:
     )
 
 
-def save_svg(content: str, path) -> None:
-    from pathlib import Path
-
+def save_svg(content: str, path: str | Path) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
 
 
-def try_convert_svg_to_png(svg_path, png_path) -> bool:
+def try_convert_svg_to_png(svg_path: str | Path, png_path: str | Path) -> bool:
     """Tente conversion SVG->PNG via cairosvg, inkscape ou rsvg-convert si dispo."""
     import shutil
     import subprocess
-    from pathlib import Path
 
     svg_path = Path(svg_path)
     png_path = Path(png_path)
