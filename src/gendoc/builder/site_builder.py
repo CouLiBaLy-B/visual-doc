@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from ..config import GendocConfig
 
 from ..analyzer.relationships import get_focused_subgraph
+from ..paths import compute_import_paths
 from ..renderers import (
     generate_class_diagram_mermaid,
     generate_class_diagram_plantuml,
@@ -533,46 +534,21 @@ class SiteBuilder:
                 }
             )
 
-        # Construire liste de chemins Python pour mkdocstrings
-        # Utiliser chemins relatifs pour portabilité
-        python_paths = []
-        cwd = Path.cwd()
-        python_paths.append(".")
-        # Parent du package (relatif à cwd si possible)
-        try:
-            pkg_parent = self.package_info.root_path.parent.resolve()
-            # rendre relatif à cwd
+        # Chemins Python pour mkdocstrings : même source que le PYTHONPATH de
+        # la CLI (gendoc.paths), sérialisés en relatif quand possible pour la
+        # portabilité du mkdocs.yml.
+        cwd = Path.cwd().resolve()
+        python_paths: list[str] = []
+        for candidate in compute_import_paths(self.package_info.root_path, cwd):
+            if candidate == cwd:
+                python_paths.append(".")
+                continue
             try:
-                rel = pkg_parent.relative_to(cwd)
-                python_paths.append(str(rel))
+                python_paths.append(str(candidate.relative_to(cwd)))
             except ValueError:
-                # si pas sous cwd, garder absolu ou nom
-                python_paths.append(str(pkg_parent))
-        except Exception:
-            pass
-        # root_path lui-même si pertinent
-        try:
-            root_path = self.package_info.root_path.resolve()
-            try:
-                rel_root = root_path.relative_to(cwd)
-                if str(rel_root) != ".":
-                    python_paths.append(str(rel_root))
-            except ValueError:
-                pass
-        except Exception:
-            pass
-        # Ajouter src si existe (layouts src/)
-        src_path = cwd / "src"
-        if src_path.exists():
-            python_paths.append("src")
-        # Dédoublonner en gardant ordre
-        seen = set()
-        deduped = []
-        for p in python_paths:
-            if p not in seen:
-                seen.add(p)
-                deduped.append(p)
-        python_paths = deduped
+                # hors du projet courant : pas de chemin machine dans mkdocs.yml
+                continue
+        python_paths = list(dict.fromkeys(python_paths))
 
         tmpl = Template(MKDOCS_YML_TEMPLATE)
         content = tmpl.render(

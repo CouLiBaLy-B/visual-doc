@@ -23,20 +23,10 @@ def _mkdocs_env(package_info) -> dict[str, str]:
     """Environnement pour mkdocs : PYTHONPATH permettant à mkdocstrings d'importer le package."""
     import os
 
-    paths = [str(Path.cwd())]
-    try:
-        pkg_root = package_info.root_path.resolve()
-        paths.append(str(pkg_root.parent))
-        paths.append(str(pkg_root))
-        paths.append(str(pkg_root.parent.parent))
-    except Exception:
-        pass
-    src_path = Path.cwd() / "src"
-    if src_path.exists():
-        paths.append(str(src_path.resolve()))
+    from .paths import compute_import_paths
 
     env = os.environ.copy()
-    unique_paths = list(dict.fromkeys(paths))
+    unique_paths = [str(p) for p in compute_import_paths(package_info.root_path)]
     existing = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = os.pathsep.join(unique_paths) + (
         os.pathsep + existing if existing else ""

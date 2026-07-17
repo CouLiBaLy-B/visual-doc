@@ -342,3 +342,40 @@ def test_rebuild_produces_identical_file_tree(temp_package, tmp_path: Path, monk
     second = sorted(p.relative_to(docs) for p in docs.rglob("*") if p.is_file())
 
     assert first == second
+
+
+def test_mkdocs_paths_derive_from_single_source(temp_package, tmp_path: Path, monkeypatch):
+    """mkdocs.yml (paths mkdocstrings) et le PYTHONPATH CLI partagent la même source."""
+    import os
+
+    from gendoc.cli import _mkdocs_env
+    from gendoc.paths import compute_import_paths
+
+    monkeypatch.chdir(tmp_path)
+    pkg = analyze_package(temp_package, package_name="testpkg")
+
+    cfg = GendocConfig()
+    cfg.package_path = temp_package
+    cfg.docs_dir = tmp_path / "docs"
+    cfg.output_dir = tmp_path / "site"
+    docs = SiteBuilder(cfg, pkg).build()
+
+    candidates = compute_import_paths(pkg.root_path, tmp_path)
+
+    # le PYTHONPATH du sous-processus contient tous les candidats, en absolu
+    env_paths = _mkdocs_env(pkg)["PYTHONPATH"].split(os.pathsep)
+    assert [str(p) for p in candidates] == env_paths[: len(candidates)]
+
+    # mkdocs.yml contient les mêmes candidats, relativisés (ceux sous le CWD)
+    mkdocs = (docs.parent / "mkdocs.yml").read_text()
+    expected_rel = []
+    for p in candidates:
+        if p == tmp_path:
+            expected_rel.append(".")
+        else:
+            try:
+                expected_rel.append(str(p.relative_to(tmp_path)))
+            except ValueError:
+                pass
+    for rel in dict.fromkeys(expected_rel):
+        assert f"'{rel}'" in mkdocs
