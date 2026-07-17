@@ -39,3 +39,4 @@ docs_html/
 .DS_Store
 Thumbs.db
 
+.gendoc_cache/

@@ -85,6 +85,11 @@ def cli() -> None:
     help="Construire site MkDocs HTML après génération",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Mode verbeux")
+@click.option(
+    "--no-cache",
+    is_flag=True,
+    help="Désactiver le cache de parsing (.gendoc_cache/)",
+)
 def build(
     package_path: Path | None,
     config: Path | None,
@@ -98,6 +103,7 @@ def build(
     site_name: str | None,
     build_site: bool,
     verbose: bool,
+    no_cache: bool,
 ) -> None:
     """Génère documentation visuelle pour un package Python.
 
@@ -161,6 +167,7 @@ def build(
                 exclude_patterns=cfg.exclude_patterns,
                 include_private=cfg.include_private,
                 include_tests=cfg.include_tests,
+                cache_dir=None if no_cache else Path(".gendoc_cache"),
             )
             progress.update(
                 task,

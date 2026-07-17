@@ -5,6 +5,7 @@ import fnmatch
 from pathlib import Path
 
 from .ast_parser import parse_module
+from .cache import ParseCache
 from .models import ModuleInfo, PackageInfo
 from .relationships import detect_circular_dependencies, detect_relationships
 
@@ -49,6 +50,7 @@ def analyze_package(
     include_private: bool = False,
     include_tests: bool = False,
     strict: bool = False,
+    cache_dir: Path | str | None = None,
 ) -> PackageInfo:
     """Analyse un package Python complet.
 
@@ -60,6 +62,8 @@ def analyze_package(
         include_tests: Inclure les fichiers/dossiers de tests.
         strict: Si True, un fichier non parsable fait échouer l'analyse
             (RuntimeError). Sinon il est ignoré et listé dans PackageInfo.errors.
+        cache_dir: Si fourni, cache disque du parsing : les fichiers dont le
+            contenu n'a pas changé (sha256) ne sont pas re-parsés.
     """
 
     root_path = Path(root_path).resolve()
@@ -104,13 +108,26 @@ def analyze_package(
             files.append(py_file)
 
     package_info = PackageInfo(name=pkg_name, root_path=analysis_root)
+    cache = ParseCache(Path(cache_dir)) if cache_dir else None
 
     # Première passe : parser chaque fichier (une seule passe AST par fichier)
     for file_path in files:
         dotted = get_module_dotted_path(file_path, analysis_root, pkg_name)
 
         try:
-            parsed = parse_module(file_path, dotted)
+            parsed = None
+            source: bytes | None = None
+            if cache is not None:
+                try:
+                    source = file_path.read_bytes()
+                except OSError:
+                    source = None
+                if source is not None:
+                    parsed = cache.get(file_path, dotted, source)
+            if parsed is None:
+                parsed = parse_module(file_path, dotted)
+                if cache is not None and source is not None:
+                    cache.put(file_path, dotted, source, parsed)
         except ValueError as e:
             if strict:
                 raise RuntimeError(f"Code non analysable dans {file_path}: {e}") from e
