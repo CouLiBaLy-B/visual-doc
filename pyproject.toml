@@ -69,6 +69,9 @@ gendoc = ["py.typed"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+  "slow: tests lents (rendu réel de diagrammes, sous-processus)",
+]
 # la couverture est exigée en CI (voir .github/workflows/ci.yml) ;
 # un `pytest` nu doit fonctionner sans pytest-cov installé
 
